@@ -1,5 +1,5 @@
 // तुमच्या Google Apps Script ची पब्लिश (Deploy) केलेली URL खालील सिंगल कोट (' ') मध्ये पेस्ट करा
-const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbx19900xs57ldlmTp78EoCYCeXsNOLqrbtUIBzb-IQ7zHoWp1aVO7djaQt4Hc02LRra/exec';
+const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwePscZ2zyVQRAKjLyhkeGqDgOqhvHBneisqrSkIQ460accM8YxRBVFlzV8fyARwmOr/exec';
 
 export interface Submission {
     id?: string;
