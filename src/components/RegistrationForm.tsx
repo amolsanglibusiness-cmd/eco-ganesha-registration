@@ -1,29 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-    User,
-    Calendar,
-    MapPin,
-    Phone,
-    Mail,
-    Loader2,
-    Send,
-    AlertCircle,
-    Camera,
-    RotateCcw,
-    Sparkles,
-} from "lucide-react";
-
+import React, { useEffect, useRef, useState } from "react";
 import TermsModal from "./TermsModal";
 import { insertSubmission } from "@/lib/supabase";
 
-interface FormData {
-    fullName: string;
-    dateOfBirth: string;
-    address: string;
-    mobileNumber: string;
-    email: string;
+interface RegistrationFormProps {
+    onSuccess: (data: {
+        fullName: string;
+        selfieDataUrl: string;
+    }) => void;
 }
 
 interface FormErrors {
@@ -36,139 +21,107 @@ interface FormErrors {
     terms?: string;
 }
 
-interface RegistrationFormProps {
-    onSuccess: (data: {
-        fullName: string;
-        selfieDataUrl: string;
-    }) => void;
-}
-
 export default function RegistrationForm({
     onSuccess,
 }: RegistrationFormProps) {
-    const [formData, setFormData] = useState<FormData>({
-        fullName: "",
-        dateOfBirth: "",
-        address: "",
-        mobileNumber: "",
-        email: "",
-    });
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
-    const [selfieDataUrl, setSelfieDataUrl] = useState<string>("");
-    const [agreedToTerms, setAgreedToTerms] = useState(false);
-    const [showTerms, setShowTerms] = useState(false);
+    const [fullName, setFullName] = useState("");
+    const [dateOfBirth, setDateOfBirth] = useState("");
+    const [address, setAddress] = useState("");
+    const [mobileNumber, setMobileNumber] = useState("");
+    const [email, setEmail] = useState("");
+
+    const [selfieDataUrl, setSelfieDataUrl] = useState("");
+    const [cameraOpen, setCameraOpen] = useState(false);
+    const [termsAccepted, setTermsAccepted] = useState(false);
+    const [termsOpen, setTermsOpen] = useState(false);
+
     const [errors, setErrors] = useState<FormErrors>({});
     const [submitting, setSubmitting] = useState(false);
-    const [submitError, setSubmitError] = useState<string | null>(null);
 
-    /* =========================================================
-       CAMERA STATES
-    ========================================================= */
-
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-    const [cameraOpen, setCameraOpen] = useState(false);
-    const [cameraLoading, setCameraLoading] = useState(false);
-    const [cameraError, setCameraError] = useState<string | null>(null);
-
-    /* =========================================================
-       START CAMERA
-    ========================================================= */
-
-    const startCamera = async () => {
-        setCameraError(null);
-        setCameraLoading(true);
-
-        try {
-            if (!navigator.mediaDevices?.getUserMedia) {
-                throw new Error(
-                    "या डिव्हाइसवर कॅमेरा उपलब्ध नाही किंवा ब्राउझर कॅमेरा वापरण्यास समर्थन देत नाही."
-                );
-            }
-
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: "user",
-                    width: {
-                        ideal: 1280,
-                    },
-                    height: {
-                        ideal: 1280,
-                    },
-                },
-                audio: false,
-            });
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-
-                await videoRef.current.play();
-            }
-
-            setCameraOpen(true);
-        } catch (error) {
-            console.error("Camera Error:", error);
-
-            setCameraError(
-                "कॅमेरा सुरू करता आला नाही. कृपया कॅमेरा परवानगी Allow करा."
-            );
-        } finally {
-            setCameraLoading(false);
-        }
-    };
-
-    /* =========================================================
-       STOP CAMERA
-    ========================================================= */
+    const inputClass =
+        "w-full rounded-xl border border-orange-200 bg-white px-4 py-3.5 text-base text-gray-900 placeholder:text-gray-400 outline-none transition-all duration-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-100";
 
     const stopCamera = () => {
-        const video = videoRef.current;
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+        }
 
-        if (video?.srcObject) {
-            const stream = video.srcObject as MediaStream;
-
-            stream.getTracks().forEach((track) => {
-                track.stop();
-            });
-
-            video.srcObject = null;
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
         }
 
         setCameraOpen(false);
     };
 
-    /* =========================================================
-       CAPTURE PHOTO
-    ========================================================= */
+    const startCamera = async () => {
+        try {
+            setErrors((prev) => ({
+                ...prev,
+                selfie: undefined,
+            }));
+
+            if (!navigator.mediaDevices?.getUserMedia) {
+                setErrors((prev) => ({
+                    ...prev,
+                    selfie: "या डिव्हाइसवर कॅमेरा उपलब्ध नाही.",
+                }));
+                return;
+            }
+
+            stopCamera();
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: "user",
+                    width: { ideal: 1080 },
+                    height: { ideal: 1440 },
+                },
+                audio: false,
+            });
+
+            streamRef.current = stream;
+            setCameraOpen(true);
+
+            requestAnimationFrame(() => {
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current
+                        .play()
+                        .catch(() => {
+                            // Browser autoplay handle
+                        });
+                }
+            });
+        } catch (error) {
+            console.error("Camera error:", error);
+
+            setErrors((prev) => ({
+                ...prev,
+                selfie:
+                    "कॅमेरा सुरू करता आला नाही. कृपया Camera permission Allow करा.",
+            }));
+        }
+    };
 
     const capturePhoto = () => {
         const video = videoRef.current;
-        const canvas = canvasRef.current;
 
-        if (!video || !canvas) return;
-
-        if (
-            video.readyState < 2 ||
-            video.videoWidth === 0 ||
-            video.videoHeight === 0
-        ) {
-            setCameraError("कॅमेरा तयार झालेला नाही. कृपया थोडा वेळ थांबा.");
+        if (!video || video.readyState < 2) {
+            setErrors((prev) => ({
+                ...prev,
+                selfie: "कॅमेरा तयार झाल्यावर पुन्हा प्रयत्न करा.",
+            }));
             return;
         }
 
-        const maxSize = 1080;
+        const canvas = document.createElement("canvas");
 
-        let width = video.videoWidth;
-        let height = video.videoHeight;
-
-        if (width > height && width > maxSize) {
-            height = Math.round((height / width) * maxSize);
-            width = maxSize;
-        } else if (height > maxSize) {
-            width = Math.round((width / height) * maxSize);
-            height = maxSize;
-        }
+        const width = video.videoWidth || 720;
+        const height = video.videoHeight || 960;
 
         canvas.width = width;
         canvas.height = height;
@@ -176,1491 +129,391 @@ export default function RegistrationForm({
         const context = canvas.getContext("2d");
 
         if (!context) {
-            setCameraError("फोटो तयार करता आला नाही.");
+            setErrors((prev) => ({
+                ...prev,
+                selfie: "फोटो तयार करता आला नाही.",
+            }));
             return;
         }
 
-        /*
-          Selfie camera प्रमाणे preview mirror आहे.
-          Capture करताना image देखील mirror ठेवली आहे.
-        */
-
         context.save();
-
         context.translate(width, 0);
         context.scale(-1, 1);
-
-        context.drawImage(
-            video,
-            0,
-            0,
-            width,
-            height
-        );
-
+        context.drawImage(video, 0, 0, width, height);
         context.restore();
 
-        const image = canvas.toDataURL(
-            "image/jpeg",
-            0.88
-        );
+        const image = canvas.toDataURL("image/jpeg", 0.9);
 
         setSelfieDataUrl(image);
-
-        if (errors.selfie) {
-            setErrors((prev) => ({
-                ...prev,
-                selfie: undefined,
-            }));
-        }
+        setErrors((prev) => ({
+            ...prev,
+            selfie: undefined,
+        }));
 
         stopCamera();
     };
 
-    /* =========================================================
-       RETAKE PHOTO
-    ========================================================= */
-
-    const retakePhoto = async () => {
+    const retakePhoto = () => {
         setSelfieDataUrl("");
-        setCameraError(null);
-
-        await startCamera();
+        startCamera();
     };
-
-    /* =========================================================
-       CLEAN CAMERA ON UNMOUNT
-    ========================================================= */
 
     useEffect(() => {
         return () => {
-            const video = videoRef.current;
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((track) => track.stop());
+                streamRef.current = null;
+            }
 
-            if (video?.srcObject) {
-                const stream = video.srcObject as MediaStream;
-
-                stream.getTracks().forEach((track) => {
-                    track.stop();
-                });
+            if (videoRef.current) {
+                videoRef.current.srcObject = null;
             }
         };
     }, []);
 
-    /* =========================================================
-       VALIDATION
-    ========================================================= */
-
     const validate = (): boolean => {
-        const e: FormErrors = {};
+        const newErrors: FormErrors = {};
 
-        // नाव
-        if (!formData.fullName.trim()) {
-            e.fullName = "संपूर्ण नाव आवश्यक आहे";
-        } else if (formData.fullName.trim().length < 3) {
-            e.fullName = "नाव किमान ३ अक्षरांचे असावे";
+        if (!fullName.trim() || fullName.trim().length < 3) {
+            newErrors.fullName = "पूर्ण नाव किमान 3 अक्षरांचे असावे.";
         }
 
-        // जन्मदिनांक
-        if (!formData.dateOfBirth) {
-            e.dateOfBirth = "जन्मदिनांक आवश्यक आहे";
+        if (!dateOfBirth) {
+            newErrors.dateOfBirth = "जन्मतारीख निवडा.";
         } else {
-            const dob = new Date(formData.dateOfBirth);
+            const selectedDate = new Date(dateOfBirth);
             const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-            if (dob >= today) {
-                e.dateOfBirth = "वैध जन्मदिनांक निवडा";
+            if (selectedDate >= today) {
+                newErrors.dateOfBirth = "योग्य जन्मतारीख निवडा.";
             }
         }
 
-        // पत्ता
-        if (!formData.address.trim()) {
-            e.address = "संपूर्ण पत्ता आवश्यक आहे";
-        } else if (formData.address.trim().length < 3) {
-            e.address = "कृपया पत्ता सविस्तर लिहा";
+        if (!address.trim() || address.trim().length < 3) {
+            newErrors.address = "पूर्ण पत्ता भरा.";
         }
 
-        // मोबाईल
-        const cleanMobile =
-            formData.mobileNumber.replace(/\D/g, "");
-
-        if (!cleanMobile) {
-            e.mobileNumber =
-                "मोबाईल क्रमांक आवश्यक आहे";
-        } else if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
-            e.mobileNumber =
-                "१० अंकी वैध मोबाईल क्रमांक टाका (६-९ ने सुरू होणारा)";
+        if (!/^[6-9]\d{9}$/.test(mobileNumber.trim())) {
+            newErrors.mobileNumber =
+                "10 अंकी योग्य मोबाईल नंबर प्रविष्ट करा.";
         }
 
-        // ईमेल
         if (
-            formData.email.trim() &&
-            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-                formData.email.trim()
-            )
+            email.trim() &&
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
         ) {
-            e.email = "वैध ई-मेल आयडी टाका";
+            newErrors.email = "योग्य ई-मेल पत्ता प्रविष्ट करा.";
         }
 
-        // सेल्फी
         if (!selfieDataUrl) {
-            e.selfie =
-                "कॅमेऱ्याने गणपती सेल्फी काढणे आवश्यक आहे";
+            newErrors.selfie = "कॅमेरातून फोटो काढणे आवश्यक आहे.";
         }
 
-        // Terms
-        if (!agreedToTerms) {
-            e.terms =
-                "कृपया नियम व अटी मान्य करा";
+        if (!termsAccepted) {
+            newErrors.terms = "अटी व नियम स्वीकारणे आवश्यक आहे.";
         }
 
-        setErrors(e);
+        setErrors(newErrors);
 
-        return Object.keys(e).length === 0;
+        return Object.keys(newErrors).length === 0;
     };
 
-    /* =========================================================
-       SUBMIT
-    ========================================================= */
-
     const handleSubmit = async (
-        ev: React.FormEvent
+        event: React.FormEvent<HTMLFormElement>
     ) => {
-        ev.preventDefault();
-
-        setSubmitError(null);
+        event.preventDefault();
 
         if (!validate()) {
-            setSubmitError(
-                "कृपया लाल रंगात दर्शवलेल्या सर्व त्रुटी दुरुस्त करा."
-            );
-
             return;
         }
 
-        setSubmitting(true);
-
         try {
-            const cleanMobile =
-                formData.mobileNumber.replace(/\D/g, "");
+            setSubmitting(true);
 
-            const { error } = await insertSubmission({
-                full_name: formData.fullName.trim(),
-                date_of_birth: formData.dateOfBirth,
-                address: formData.address.trim(),
-                mobile_number: cleanMobile,
-                email: formData.email.trim() || null,
+            await insertSubmission({
+                full_name: fullName.trim(),
+                date_of_birth: dateOfBirth,
+                address: address.trim(),
+                mobile_number: mobileNumber.trim(),
+                email: email.trim() || null,
                 selfie_data_url: selfieDataUrl,
             });
 
-            if (error) {
-                console.error(
-                    "Supabase Database Error:",
-                    error
-                );
-
-                throw error;
-            }
-
             onSuccess({
-                fullName: formData.fullName.trim(),
+                fullName: fullName.trim(),
                 selfieDataUrl,
             });
-        } catch (err: unknown) {
-            console.error(
-                "Submission Catch Error:",
-                err
-            );
+        } catch (error) {
+            console.error("Submission error:", error);
 
-            const msg =
-                err instanceof Error
-                    ? err.message
-                    : "डेटाबेसमध्ये माहिती जतन करताना त्रुटी आली.";
-
-            setSubmitError(msg);
+            setErrors({
+                terms: "माहिती जतन करताना समस्या आली. कृपया पुन्हा प्रयत्न करा.",
+            });
         } finally {
             setSubmitting(false);
         }
     };
 
-    /* =========================================================
-       INPUT CHANGE
-    ========================================================= */
-
-    const handleChange = (
-        field: keyof FormData,
-        value: string
-    ) => {
-        setFormData((prev) => ({
-            ...prev,
-            [field]: value,
-        }));
-
-        if (errors[field as keyof FormErrors]) {
-            setErrors((prev) => ({
-                ...prev,
-                [field]: undefined,
-            }));
-        }
-    };
-
-    /* =========================================================
-       CLASSES
-    ========================================================= */
-
-    const inputClass = `
-    w-full
-    pl-12
-    pr-4
-    py-3.5
-    rounded-2xl
-    bg-white/[0.07]
-    border
-    border-white/15
-    text-white
-    placeholder-white/40
-    input-glow
-    transition-all
-    duration-200
-    outline-none
-    text-base
-    focus:border-orange-300/70
-    focus:bg-white/[0.10]
-    focus:ring-2
-    focus:ring-orange-400/20
-  `;
-
-    const errorClass =
-        "text-red-300 text-sm mt-1.5 flex items-center gap-1 font-medium";
-
-    /* =========================================================
-       RETURN
-    ========================================================= */
-
     return (
         <>
-            <div className="w-full">
+            <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-4 sm:px-6 sm:py-8">
+                <div className="mx-auto w-full max-w-2xl">
+                    <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl shadow-orange-100/50">
+                        {/* Header */}
+                        <div className="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-500 to-amber-500 px-5 py-7 text-center text-white sm:px-8 sm:py-9">
+                            <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/10" />
+                            <div className="absolute -bottom-20 -left-16 h-44 w-44 rounded-full bg-white/10" />
 
-                {/* =====================================================
-            ONE SINGLE MAIN GANESH CARD
-        ===================================================== */}
-
-                <div
-                    className="
-            relative
-            w-full
-            overflow-hidden
-            rounded-[28px]
-            border
-            border-yellow-400/30
-            bg-gradient-to-br
-            from-[#26080d]
-            via-[#16091b]
-            to-[#180b2b]
-            shadow-2xl
-          "
-                >
-
-                    {/* TOP FESTIVE GLOW */}
-
-                    <div
-                        className="
-              absolute
-              top-0
-              left-0
-              right-0
-              h-1
-              bg-gradient-to-r
-              from-orange-400
-              via-yellow-300
-              to-pink-500
-            "
-                    />
-
-                    {/* =================================================
-              GANPATI HEADER
-          ================================================= */}
-
-                    <div
-                        className="
-              relative
-              px-4
-              pt-5
-              pb-6
-              sm:px-7
-              sm:pt-7
-              sm:pb-7
-              text-center
-            "
-                    >
-
-                        {/* Decorative elements */}
-
-                        <div
-                            className="
-                pointer-events-none
-                absolute
-                top-2
-                left-2
-                text-4xl
-                opacity-30
-              "
-                        >
-                            🪔
+                            <div className="relative">
+                                <img
+                                    src="/ganpati-header.png"
+                                    alt="श्री गणेश उत्सव"
+                                    className="mx-auto h-auto w-full max-w-[1200px] object-contain"
+                                />
+                            </div>
                         </div>
-
-                        <div
-                            className="
-                pointer-events-none
-                absolute
-                top-2
-                right-2
-                text-4xl
-                opacity-30
-              "
-                        >
-                            🪔
-                        </div>
-
-                        <Sparkles
-                            className="
-                absolute
-                top-5
-                left-1/2
-                -translate-x-1/2
-                w-4
-                h-4
-                text-yellow-300
-                opacity-70
-              "
-                        />
-
-                        {/* GANPATI IMAGE */}
-
-                        <div
-                            className="
-                relative
-                mx-auto
-                mt-2
-                mb-4
-                w-[145px]
-                h-[145px]
-                sm:w-[175px]
-                sm:h-[175px]
-                rounded-full
-                overflow-hidden
-                border
-                border-yellow-300/60
-                bg-gradient-to-br
-                from-orange-300/20
-                via-red-500/20
-                to-purple-700/30
-                shadow-[0_0_40px_rgba(251,146,60,0.35)]
-              "
-                        >
-                            <img
-                                src="/ganpati-murti.png"
-                                alt="गणपती बाप्पा"
-                                className="
-                  w-full
-                  h-full
-                  object-cover
-                "
-                            />
-
-                            {/* Image overlay */}
-
-                            <div
-                                className="
-                  absolute
-                  inset-0
-                  rounded-full
-                  ring-1
-                  ring-inset
-                  ring-white/20
-                  pointer-events-none
-                "
-                            />
-                        </div>
-
-                        {/* TITLE */}
-
-                        <h1
-                            className="
-                text-2xl
-                sm:text-3xl
-                font-extrabold
-                text-white
-                tracking-wide
-                drop-shadow-lg
-              "
-                        >
-                            गणपती बाप्पा मोरया!
-                        </h1>
-
-                        <div
-                            className="
-                mx-auto
-                my-3
-                h-1
-                w-20
-                rounded-full
-                bg-gradient-to-r
-                from-orange-400
-                via-yellow-300
-                to-pink-400
-              "
-                        />
-
-                        <h2
-                            className="
-                text-xl
-                sm:text-2xl
-                font-extrabold
-                text-yellow-200
-              "
-                        >
-                            📸 गणपती सेल्फी
-                        </h2>
-
-                        <p
-                            className="
-                mt-2
-                text-sm
-                sm:text-base
-                text-white/75
-                leading-relaxed
-              "
-                        >
-                            बाप्पासोबतचा तुमचा खास क्षण
-                            <br />
-                            आमच्यासोबत नोंदवा
-                        </p>
-
-                        <div
-                            className="
-                mt-4
-                flex
-                justify-center
-                gap-2
-                flex-wrap
-              "
-                        >
-                            <span
-                                className="
-                  rounded-full
-                  border
-                  border-yellow-300/20
-                  bg-white/10
-                  px-3
-                  py-1
-                  text-xs
-                  text-yellow-100
-                "
-                            >
-                                🌺 मंगलमूर्ती
-                            </span>
-
-                            <span
-                                className="
-                  rounded-full
-                  border
-                  border-yellow-300/20
-                  bg-white/10
-                  px-3
-                  py-1
-                  text-xs
-                  text-yellow-100
-                "
-                            >
-                                🙏 शुभ गणेशोत्सव
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* =================================================
-              FORM CONTENT
-          ================================================= */}
-
-                    <div
-                        className="
-              px-4
-              pb-5
-              sm:px-7
-              sm:pb-7
-            "
-                    >
 
                         <form
                             onSubmit={handleSubmit}
-                            className="space-y-5"
+                            className="space-y-5 p-4 sm:p-7"
                         >
-
-                            {/* =================================================
-                  NAME
-              ================================================= */}
-
+                            {/* Full Name */}
                             <div>
-                                <label
-                                    className="
-                    block
-                    text-white/85
-                    text-sm
-                    font-semibold
-                    mb-2
-                  "
-                                >
-                                    संपूर्ण नाव{" "}
-                                    <span className="text-orange-300">
-                                        *
-                                    </span>
+                                <label className="mb-2 block text-sm font-semibold text-gray-800">
+                                    पूर्ण नाव <span className="text-red-500">*</span>
                                 </label>
 
-                                <div className="relative">
-                                    <User
-                                        className="
-                      absolute
-                      left-4
-                      top-1/2
-                      -translate-y-1/2
-                      w-5
-                      h-5
-                      text-orange-300/70
-                    "
-                                    />
-
-                                    <input
-                                        type="text"
-                                        value={formData.fullName}
-                                        onChange={(e) =>
-                                            handleChange(
-                                                "fullName",
-                                                e.target.value
-                                            )
-                                        }
-                                        placeholder="तुमचे संपूर्ण नाव"
-                                        className={`${inputClass} ${errors.fullName
-                                                ? "border-red-500"
-                                                : ""
-                                            }`}
-                                    />
-                                </div>
+                                <input
+                                    type="text"
+                                    value={fullName}
+                                    onChange={(e) => setFullName(e.target.value)}
+                                    placeholder="तुमचे पूर्ण नाव"
+                                    className={inputClass}
+                                />
 
                                 {errors.fullName && (
-                                    <p className={errorClass}>
-                                        <AlertCircle className="w-4 h-4" />
+                                    <p className="mt-1.5 text-sm text-red-600">
                                         {errors.fullName}
                                     </p>
                                 )}
                             </div>
 
-                            {/* =================================================
-                  DATE
-              ================================================= */}
-
+                            {/* DOB */}
                             <div>
-                                <label
-                                    className="
-                    block
-                    text-white/85
-                    text-sm
-                    font-semibold
-                    mb-2
-                  "
-                                >
-                                    जन्मदिनांक{" "}
-                                    <span className="text-orange-300">
-                                        *
-                                    </span>
+                                <label className="mb-2 block text-sm font-semibold text-gray-800">
+                                    जन्मतारीख <span className="text-red-500">*</span>
                                 </label>
 
-                                <div className="relative">
-                                    <Calendar
-                                        className="
-                      absolute
-                      left-4
-                      top-1/2
-                      -translate-y-1/2
-                      w-5
-                      h-5
-                      text-orange-300/70
-                      z-10
-                      pointer-events-none
-                    "
-                                    />
-
-                                    <input
-                                        type="date"
-                                        value={formData.dateOfBirth}
-                                        onChange={(e) =>
-                                            handleChange(
-                                                "dateOfBirth",
-                                                e.target.value
-                                            )
-                                        }
-                                        max={
-                                            new Date()
-                                                .toISOString()
-                                                .split("T")[0]
-                                        }
-                                        className={`${inputClass} ${errors.dateOfBirth
-                                                ? "border-red-500"
-                                                : ""
-                                            } [color-scheme:dark]`}
-                                    />
-                                </div>
+                                <input
+                                    type="date"
+                                    value={dateOfBirth}
+                                    onChange={(e) => setDateOfBirth(e.target.value)}
+                                    className={inputClass}
+                                />
 
                                 {errors.dateOfBirth && (
-                                    <p className={errorClass}>
-                                        <AlertCircle className="w-4 h-4" />
+                                    <p className="mt-1.5 text-sm text-red-600">
                                         {errors.dateOfBirth}
                                     </p>
                                 )}
                             </div>
 
-                            {/* =================================================
-                  ADDRESS
-              ================================================= */}
-
+                            {/* Address */}
                             <div>
-                                <label
-                                    className="
-                    block
-                    text-white/85
-                    text-sm
-                    font-semibold
-                    mb-2
-                  "
-                                >
-                                    संपूर्ण पत्ता{" "}
-                                    <span className="text-orange-300">
-                                        *
-                                    </span>
+                                <label className="mb-2 block text-sm font-semibold text-gray-800">
+                                    पूर्ण पत्ता <span className="text-red-500">*</span>
                                 </label>
 
-                                <div className="relative">
-                                    <MapPin
-                                        className="
-                      absolute
-                      left-4
-                      top-4
-                      w-5
-                      h-5
-                      text-orange-300/70
-                    "
-                                    />
-
-                                    <textarea
-                                        value={formData.address}
-                                        onChange={(e) =>
-                                            handleChange(
-                                                "address",
-                                                e.target.value
-                                            )
-                                        }
-                                        placeholder="संपूर्ण पत्ता (घर क्रमांक, रस्ता, गाव/शहर, तालुका, जिल्हा)"
-                                        rows={3}
-                                        className={`${inputClass} ${errors.address
-                                                ? "border-red-500"
-                                                : ""
-                                            } resize-none pt-4`}
-                                    />
-                                </div>
+                                <textarea
+                                    value={address}
+                                    onChange={(e) => setAddress(e.target.value)}
+                                    placeholder="तुमचा पूर्ण पत्ता"
+                                    rows={3}
+                                    className={`${inputClass} resize-none`}
+                                />
 
                                 {errors.address && (
-                                    <p className={errorClass}>
-                                        <AlertCircle className="w-4 h-4" />
+                                    <p className="mt-1.5 text-sm text-red-600">
                                         {errors.address}
                                     </p>
                                 )}
                             </div>
 
-                            {/* =================================================
-                  MOBILE + EMAIL
-              ================================================= */}
+                            {/* Mobile */}
+                            <div>
+                                <label className="mb-2 block text-sm font-semibold text-gray-800">
+                                    मोबाईल नंबर <span className="text-red-500">*</span>
+                                </label>
 
-                            <div
-                                className="
-                  grid
-                  grid-cols-1
-                  sm:grid-cols-2
-                  gap-5
-                "
-                            >
+                                <input
+                                    type="tel"
+                                    inputMode="numeric"
+                                    maxLength={10}
+                                    value={mobileNumber}
+                                    onChange={(e) =>
+                                        setMobileNumber(
+                                            e.target.value.replace(/\D/g, "").slice(0, 10)
+                                        )
+                                    }
+                                    placeholder="10 अंकी मोबाईल नंबर"
+                                    className={inputClass}
+                                />
 
-                                {/* MOBILE */}
-
-                                <div>
-                                    <label
-                                        className="
-                      block
-                      text-white/85
-                      text-sm
-                      font-semibold
-                      mb-2
-                    "
-                                    >
-                                        मोबाईल क्रमांक{" "}
-                                        <span className="text-orange-300">
-                                            *
-                                        </span>
-                                    </label>
-
-                                    <div className="relative">
-                                        <Phone
-                                            className="
-                        absolute
-                        left-4
-                        top-1/2
-                        -translate-y-1/2
-                        w-5
-                        h-5
-                        text-orange-300/70
-                      "
-                                        />
-
-                                        <input
-                                            type="tel"
-                                            inputMode="numeric"
-                                            value={formData.mobileNumber}
-                                            onChange={(e) =>
-                                                handleChange(
-                                                    "mobileNumber",
-                                                    e.target.value
-                                                )
-                                            }
-                                            placeholder="९८७६५४३२१०"
-                                            maxLength={10}
-                                            className={`${inputClass} ${errors.mobileNumber
-                                                    ? "border-red-500"
-                                                    : ""
-                                                }`}
-                                        />
-                                    </div>
-
-                                    {errors.mobileNumber && (
-                                        <p className={errorClass}>
-                                            <AlertCircle className="w-4 h-4" />
-                                            {errors.mobileNumber}
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* EMAIL */}
-
-                                <div>
-                                    <label
-                                        className="
-                      block
-                      text-white/85
-                      text-sm
-                      font-semibold
-                      mb-2
-                    "
-                                    >
-                                        ई-मेल आयडी{" "}
-                                        <span className="text-white/40 text-xs">
-                                            (पर्यायी)
-                                        </span>
-                                    </label>
-
-                                    <div className="relative">
-                                        <Mail
-                                            className="
-                        absolute
-                        left-4
-                        top-1/2
-                        -translate-y-1/2
-                        w-5
-                        h-5
-                        text-orange-300/70
-                      "
-                                        />
-
-                                        <input
-                                            type="email"
-                                            value={formData.email}
-                                            onChange={(e) =>
-                                                handleChange(
-                                                    "email",
-                                                    e.target.value
-                                                )
-                                            }
-                                            placeholder="example@email.com"
-                                            className={`${inputClass} ${errors.email
-                                                    ? "border-red-500"
-                                                    : ""
-                                                }`}
-                                        />
-                                    </div>
-
-                                    {errors.email && (
-                                        <p className={errorClass}>
-                                            <AlertCircle className="w-4 h-4" />
-                                            {errors.email}
-                                        </p>
-                                    )}
-                                </div>
+                                {errors.mobileNumber && (
+                                    <p className="mt-1.5 text-sm text-red-600">
+                                        {errors.mobileNumber}
+                                    </p>
+                                )}
                             </div>
 
-                            {/* =================================================
-                  CAMERA / SELFIE
-              ================================================= */}
+                            {/* Email */}
+                            <div>
+                                <label className="mb-2 block text-sm font-semibold text-gray-800">
+                                    ई-मेल <span className="text-gray-400">(ऐच्छिक)</span>
+                                </label>
 
-                            <div
-                                className="
-                  relative
-                  overflow-hidden
-                  rounded-3xl
-                  border
-                  border-orange-400/40
-                  bg-gradient-to-br
-                  from-orange-500/[0.08]
-                  via-red-500/[0.08]
-                  to-purple-500/[0.12]
-                  p-4
-                  sm:p-5
-                "
-                            >
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="example@email.com"
+                                    className={inputClass}
+                                />
 
-                                {/* Camera heading */}
+                                {errors.email && (
+                                    <p className="mt-1.5 text-sm text-red-600">
+                                        {errors.email}
+                                    </p>
+                                )}
+                            </div>
 
-                                <div
-                                    className="
-                    flex
-                    items-center
-                    gap-3
-                    mb-4
-                  "
-                                >
-                                    <div
-                                        className="
-                      flex
-                      h-12
-                      w-12
-                      flex-shrink-0
-                      items-center
-                      justify-center
-                      rounded-full
-                      bg-gradient-to-br
-                      from-orange-400
-                      to-pink-600
-                      shadow-lg
-                    "
-                                    >
-                                        <Camera className="w-6 h-6 text-white" />
-                                    </div>
+                            {/* Camera Section */}
+                            <div className="rounded-2xl border border-orange-100 bg-orange-50/60 p-4">
+                                <div className="mb-3">
+                                    <h2 className="text-base font-bold text-gray-900">
+                                        तुमचा फोटो
+                                    </h2>
 
-                                    <div>
-                                        <h3
-                                            className="
-                        text-white
-                        font-extrabold
-                        text-lg
-                      "
-                                        >
-                                            गणपती सेल्फी{" "}
-                                            <span className="text-orange-300">
-                                                *
-                                            </span>
-                                        </h3>
-
-                                        <p
-                                            className="
-                        text-white/50
-                        text-xs
-                        sm:text-sm
-                      "
-                                        >
-                                            फक्त कॅमेऱ्याने फोटो काढा
-                                        </p>
-                                    </div>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        फक्त कॅमेरातून फोटो काढा
+                                    </p>
                                 </div>
 
-                                {/* =================================================
-                    CAMERA NOT OPEN + NO PHOTO
-                ================================================= */}
-
-                                {!cameraOpen && !selfieDataUrl && (
-                                    <div
-                                        className="
-                      rounded-2xl
-                      border
-                      border-dashed
-                      border-orange-300/40
-                      bg-black/20
-                      p-5
-                      sm:p-7
-                      text-center
-                    "
+                                {!selfieDataUrl && !cameraOpen && (
+                                    <button
+                                        type="button"
+                                        onClick={startCamera}
+                                        className="flex w-full items-center justify-center gap-3 rounded-2xl bg-orange-600 px-5 py-4 text-base font-bold text-white shadow-lg shadow-orange-200 transition hover:bg-orange-700 active:scale-[0.99]"
                                     >
-
-                                        <div
-                                            className="
-                        mx-auto
-                        mb-4
-                        flex
-                        h-20
-                        w-20
-                        items-center
-                        justify-center
-                        rounded-full
-                        bg-gradient-to-br
-                        from-orange-400/20
-                        to-pink-500/20
-                        border
-                        border-orange-300/30
-                      "
-                                        >
-                                            <Camera
-                                                className="
-                          w-10
-                          h-10
-                          text-orange-300
-                        "
-                                            />
-                                        </div>
-
-                                        <h4
-                                            className="
-                        text-white
-                        font-bold
-                        text-base
-                        sm:text-lg
-                      "
-                                        >
-                                            बाप्पासोबत सेल्फी काढा
-                                        </h4>
-
-                                        <p
-                                            className="
-                        mt-1
-                        text-white/45
-                        text-xs
-                        sm:text-sm
-                      "
-                                        >
-                                            खालील बटन दाबून कॅमेरा सुरू करा
-                                        </p>
-
-                                        <button
-                                            type="button"
-                                            onClick={startCamera}
-                                            disabled={cameraLoading}
-                                            className="
-                        mt-5
-                        w-full
-                        sm:w-auto
-                        min-w-[220px]
-                        rounded-2xl
-                        bg-gradient-to-r
-                        from-orange-500
-                        via-red-500
-                        to-pink-600
-                        px-6
-                        py-4
-                        text-white
-                        font-extrabold
-                        text-base
-                        shadow-lg
-                        transition-all
-                        hover:scale-[1.02]
-                        active:scale-[0.98]
-                        disabled:opacity-60
-                        flex
-                        items-center
-                        justify-center
-                        gap-2
-                      "
-                                        >
-                                            {cameraLoading ? (
-                                                <>
-                                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                                    कॅमेरा सुरू होत आहे...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Camera className="w-5 h-5" />
-                                                    कॅमेरा सुरू करा
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
+                                        <span className="text-2xl">📷</span>
+                                        <span>कॅमेरा सुरू करा</span>
+                                    </button>
                                 )}
-
-                                {/* =================================================
-                    LIVE CAMERA
-                ================================================= */}
 
                                 {cameraOpen && (
-                                    <div className="space-y-4">
+                                    <div className="overflow-hidden rounded-2xl bg-black">
+                                        <video
+                                            ref={videoRef}
+                                            autoPlay
+                                            playsInline
+                                            muted
+                                            className="aspect-[3/4] w-full object-cover sm:aspect-[4/3]"
+                                            style={{
+                                                transform: "scaleX(-1)",
+                                            }}
+                                        />
 
-                                        <div
-                                            className="
-                        relative
-                        w-full
-                        overflow-hidden
-                        rounded-2xl
-                        bg-black
-                        border
-                        border-orange-300/30
-                        shadow-2xl
-                        aspect-[3/4]
-                        sm:aspect-[4/3]
-                      "
-                                        >
-                                            <video
-                                                ref={videoRef}
-                                                autoPlay
-                                                muted
-                                                playsInline
-                                                className="
-                          absolute
-                          inset-0
-                          w-full
-                          h-full
-                          object-cover
-                          -scale-x-100
-                        "
-                                            />
-
-                                            {/* Camera frame */}
-
-                                            <div
-                                                className="
-                          pointer-events-none
-                          absolute
-                          inset-4
-                          rounded-2xl
-                          border-2
-                          border-white/35
-                        "
-                                            />
-
-                                            {/* Top label */}
-
-                                            <div
-                                                className="
-                          absolute
-                          top-4
-                          left-1/2
-                          -translate-x-1/2
-                          rounded-full
-                          bg-black/50
-                          backdrop-blur-md
-                          px-4
-                          py-2
-                          text-xs
-                          font-semibold
-                          text-white
-                        "
+                                        <div className="p-3">
+                                            <button
+                                                type="button"
+                                                onClick={capturePhoto}
+                                                className="w-full rounded-xl bg-white px-5 py-3.5 font-bold text-orange-600 shadow transition active:scale-[0.99]"
                                             >
-                                                📸 बाप्पासोबत सेल्फी
-                                            </div>
-
-                                            {/* Bottom gradient */}
-
-                                            <div
-                                                className="
-                          absolute
-                          bottom-0
-                          left-0
-                          right-0
-                          h-28
-                          bg-gradient-to-t
-                          from-black/70
-                          to-transparent
-                          pointer-events-none
-                        "
-                                            />
+                                                📸 फोटो काढा
+                                            </button>
                                         </div>
-
-                                        {/* Capture button */}
-
-                                        <button
-                                            type="button"
-                                            onClick={capturePhoto}
-                                            className="
-                        w-full
-                        rounded-2xl
-                        bg-gradient-to-r
-                        from-orange-500
-                        via-red-500
-                        to-pink-600
-                        py-4
-                        text-white
-                        font-extrabold
-                        text-lg
-                        shadow-xl
-                        flex
-                        items-center
-                        justify-center
-                        gap-3
-                        transition-all
-                        hover:scale-[1.01]
-                        active:scale-[0.98]
-                      "
-                                        >
-                                            <span
-                                                className="
-                          flex
-                          h-9
-                          w-9
-                          items-center
-                          justify-center
-                          rounded-full
-                          bg-white/20
-                        "
-                                            >
-                                                <Camera className="w-5 h-5" />
-                                            </span>
-
-                                            फोटो काढा
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={stopCamera}
-                                            className="
-                        w-full
-                        rounded-xl
-                        border
-                        border-white/10
-                        bg-white/5
-                        py-3
-                        text-sm
-                        font-medium
-                        text-white/70
-                        hover:bg-white/10
-                      "
-                                        >
-                                            कॅमेरा बंद करा
-                                        </button>
                                     </div>
                                 )}
 
-                                {/* =================================================
-                    CAPTURED PHOTO
-                ================================================= */}
-
                                 {selfieDataUrl && !cameraOpen && (
-                                    <div className="space-y-4">
-
-                                        <div
-                                            className="
-                        relative
-                        overflow-hidden
-                        rounded-2xl
-                        border
-                        border-green-400/30
-                        bg-black
-                      "
-                                        >
+                                    <div>
+                                        <div className="overflow-hidden rounded-2xl bg-gray-100">
                                             <img
                                                 src={selfieDataUrl}
-                                                alt="गणपती सेल्फी"
-                                                className="
-                          block
-                          w-full
-                          max-h-[520px]
-                          object-contain
-                        "
+                                                alt="तुमचा फोटो"
+                                                className="aspect-[3/4] w-full object-cover sm:aspect-[4/3]"
                                             />
-
-                                            <div
-                                                className="
-                          absolute
-                          top-3
-                          right-3
-                          rounded-full
-                          bg-green-500/90
-                          px-3
-                          py-1.5
-                          text-xs
-                          font-bold
-                          text-white
-                        "
-                                            >
-                                                ✓ फोटो तयार
-                                            </div>
                                         </div>
 
                                         <button
                                             type="button"
                                             onClick={retakePhoto}
-                                            className="
-                        w-full
-                        rounded-2xl
-                        border
-                        border-orange-300/30
-                        bg-orange-500/10
-                        py-3.5
-                        text-white
-                        font-bold
-                        flex
-                        items-center
-                        justify-center
-                        gap-2
-                        hover:bg-orange-500/20
-                        transition-all
-                      "
+                                            className="mt-3 w-full rounded-xl border border-orange-300 bg-white px-5 py-3 font-semibold text-orange-700 transition hover:bg-orange-50"
                                         >
-                                            <RotateCcw className="w-5 h-5" />
-                                            पुन्हा फोटो काढा
+                                            🔄 पुन्हा फोटो काढा
                                         </button>
                                     </div>
                                 )}
 
-                                {/* Camera error */}
-
-                                {cameraError && (
-                                    <div
-                                        className="
-                      mt-3
-                      flex
-                      items-start
-                      gap-2
-                      rounded-xl
-                      border
-                      border-red-500/30
-                      bg-red-500/10
-                      p-3
-                    "
-                                    >
-                                        <AlertCircle
-                                            className="
-                        w-5
-                        h-5
-                        text-red-400
-                        flex-shrink-0
-                      "
-                                        />
-
-                                        <p className="text-red-200 text-sm">
-                                            {cameraError}
-                                        </p>
-                                    </div>
-                                )}
-
-                                {/* Selfie validation error */}
-
                                 {errors.selfie && (
-                                    <p className={errorClass}>
-                                        <AlertCircle className="w-4 h-4" />
+                                    <p className="mt-2 text-sm text-red-600">
                                         {errors.selfie}
                                     </p>
                                 )}
-
-                                <p
-                                    className="
-                    mt-3
-                    text-center
-                    text-xs
-                    text-white/40
-                  "
-                                >
-                                    🔒 फोटो फक्त कॅमेऱ्यातून घेता येईल
-                                </p>
                             </div>
 
-                            {/* Hidden canvas */}
-
-                            <canvas
-                                ref={canvasRef}
-                                className="hidden"
-                            />
-
-                            {/* =================================================
-                  TERMS
-              ================================================= */}
-
-                            <div
-                                className={`
-                  rounded-2xl
-                  p-4
-                  border
-                  bg-white/[0.04]
-                  ${errors.terms
-                                        ? "border-red-500"
-                                        : "border-white/10"
-                                    }
-                `}
-                            >
-                                <label
-                                    className="
-                    flex
-                    items-start
-                    gap-3
-                    cursor-pointer
-                  "
-                                >
+                            {/* Terms Checkbox */}
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                                <label className="flex cursor-pointer items-start gap-3">
                                     <input
                                         type="checkbox"
-                                        checked={agreedToTerms}
-                                        onChange={(e) => {
-                                            setAgreedToTerms(
-                                                e.target.checked
-                                            );
-
-                                            if (errors.terms) {
-                                                setErrors((prev) => ({
-                                                    ...prev,
-                                                    terms: undefined,
-                                                }));
-                                            }
-                                        }}
-                                        className="
-                      mt-1
-                      w-5
-                      h-5
-                      accent-orange-500
-                      cursor-pointer
-                      flex-shrink-0
-                    "
+                                        checked={termsAccepted}
+                                        onChange={(e) =>
+                                            setTermsAccepted(e.target.checked)
+                                        }
+                                        className="mt-1 h-5 w-5 accent-orange-600"
                                     />
 
-                                    <span
-                                        className="
-                      text-white/80
-                      text-sm
-                      leading-relaxed
-                    "
-                                    >
-                                        मी{" "}
+                                    <span className="text-sm leading-6 text-gray-700">
+                                        मी दिलेली माहिती योग्य आहे आणि कार्यक्रमाच्या
+                                        अटी व नियम मला मान्य आहेत.
                                         <button
                                             type="button"
-                                            onClick={() =>
-                                                setShowTerms(true)
-                                            }
-                                            className="
-                        text-yellow-300
-                        underline
-                        font-semibold
-                      "
+                                            onClick={() => setTermsOpen(true)}
+                                            className="ml-1 font-semibold text-orange-600 underline focus:outline-none"
                                         >
-                                            नियम व अटी
-                                        </button>{" "}
-                                        वाचले आहेत व त्या मान्य
-                                        करतो/करते.
+                                            अटी व नियम पाहा
+                                        </button>
                                     </span>
                                 </label>
 
                                 {errors.terms && (
-                                    <p className={errorClass}>
-                                        <AlertCircle className="w-4 h-4" />
+                                    <p className="mt-2 text-sm text-red-600">
                                         {errors.terms}
                                     </p>
                                 )}
                             </div>
 
-                            {/* =================================================
-                  SUBMIT ERROR
-              ================================================= */}
-
-                            {submitError && (
-                                <div
-                                    className="
-                    flex
-                    items-start
-                    gap-2
-                    bg-red-500/15
-                    border
-                    border-red-500/30
-                    rounded-xl
-                    p-3
-                  "
-                                >
-                                    <AlertCircle
-                                        className="
-                      w-5
-                      h-5
-                      text-red-400
-                      flex-shrink-0
-                    "
-                                    />
-
-                                    <p className="text-red-200 text-sm">
-                                        {submitError}
-                                    </p>
-                                </div>
-                            )}
-
-                            {/* =================================================
-                  SUBMIT
-              ================================================= */}
-
+                            {/* Submit Button */}
                             <button
                                 type="submit"
                                 disabled={submitting}
-                                className="
-                  relative
-                  w-full
-                  overflow-hidden
-                  rounded-2xl
-                  bg-gradient-to-r
-                  from-orange-500
-                  via-red-500
-                  to-purple-600
-                  py-4
-                  text-white
-                  font-extrabold
-                  text-lg
-                  shadow-xl
-                  transition-all
-                  hover:scale-[1.01]
-                  active:scale-[0.99]
-                  disabled:opacity-50
-                  disabled:cursor-not-allowed
-                  flex
-                  items-center
-                  justify-center
-                  gap-2
-                "
+                                className="w-full rounded-2xl bg-gradient-to-r from-orange-600 to-amber-500 px-5 py-4 text-base font-bold text-white shadow-lg shadow-orange-200 transition hover:from-orange-700 hover:to-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {submitting ? (
-                                    <>
-                                        <Loader2
-                                            className="
-                        w-5
-                        h-5
-                        animate-spin
-                      "
-                                        />
-                                        नोंदणी होत आहे...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Camera className="w-5 h-5" />
-                                        गणपती सेल्फी नोंदवा
-                                        <Send className="w-5 h-5" />
-                                    </>
-                                )}
+                                {submitting
+                                    ? "नोंदणी जतन होत आहे..."
+                                    : "गणपती उत्सवासाठी सहभागी व्हा"}
                             </button>
-
-                            <p
-                                className="
-                  text-center
-                  text-white/40
-                  text-xs
-                  pb-1
-                "
-                            >
-                                <span className="text-orange-300">
-                                    *
-                                </span>{" "}
-                                चिन्हांकित सर्व फील्ड आवश्यक आहेत
-                            </p>
                         </form>
                     </div>
                 </div>
             </div>
 
-            {/* =======================================================
-          TERMS MODAL
-      ======================================================= */}
-
+            {/* Terms & Conditions Modal */}
             <TermsModal
-                isOpen={showTerms}
-                onClose={() => setShowTerms(false)}
+                open={termsOpen}
+                onClose={() => setTermsOpen(false)}
             />
         </>
     );

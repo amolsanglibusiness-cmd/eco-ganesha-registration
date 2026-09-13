@@ -1,112 +1,211 @@
-import { useState } from 'react';
-import { Download, Share2, CheckCircle, Sparkles, RotateCcw } from 'lucide-react';
-import StatusCard, { getStatusCardDataUrl } from './StatusCard';
+"use client";
+
+import React, { useState } from "react";
 
 interface SuccessViewProps {
-  fullName: string;
-  selfieDataUrl: string;
-  onReset: () => void;
+    fullName: string;
+    selfieDataUrl: string;
+    onReset: () => void;
 }
 
-export default function SuccessView({ fullName, selfieDataUrl, onReset }: SuccessViewProps) {
-  const [downloading, setDownloading] = useState(false);
+export default function SuccessView({
+    fullName,
+    selfieDataUrl,
+    onReset,
+}: SuccessViewProps) {
+    const [sharing, setSharing] = useState(false);
 
-  const handleDownload = () => {
-    const dataUrl = getStatusCardDataUrl();
-    if (!dataUrl) return;
+    const getFileName = () => {
+        const safeName = fullName
+            .trim()
+            .replace(/[^\p{L}\p{N}]+/gu, "_")
+            .replace(/^_+|_+$/g, "");
 
-    setDownloading(true);
-    const link = document.createElement('a');
-    link.download = `EcoGanesha2026_${fullName.replace(/\s+/g, '_')}.jpg`;
-    link.href = dataUrl;
-    link.click();
-    setTimeout(() => setDownloading(false), 1000);
-  };
+        return `GanpatiUtsav_${ safeName || "Participant" }.jpg`;
+    };
 
-  const handleWhatsAppShare = () => {
-    const dataUrl = getStatusCardDataUrl();
-    if (!dataUrl) return;
+    const dataUrlToBlob = async (
+        dataUrl: string
+    ): Promise<Blob> => {
+        const response = await fetch(dataUrl);
+        return response.blob();
+    };
 
-    const text = `🙏 घरगुती इकोफ्रेंडली गणेशा २०२६ 🌿\n\nमी "${fullName}" या राज्यस्तरीय स्पर्धेत सहभागी झालो/झाले आहे! 🎉\n\n✅ अधिकृत सहभागी\n\nतुम्हीही सहभाग नोंदवा! 🦚\n#EcoFriendlyGanesha2026 #घरगुतीइकोफ्रेंडलीगणेशा`;
+    const downloadPhoto = () => {
+        if (!selfieDataUrl) {
+            alert("फोटो उपलब्ध नाही.");
+            return;
+        }
 
-    // Try Web Share API first (mobile)
-    if (navigator.share && dataUrl.startsWith('data:')) {
-      // Convert data URL to blob for sharing
-      fetch(dataUrl)
-        .then((res) => res.blob())
-        .then((blob) => {
-          const file = new File([blob], `EcoGanesha2026.jpg`, { type: 'image/jpeg' });
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            navigator.share({
-              text,
-              files: [file],
-            }).catch(() => {
-              // Fallback to WhatsApp URL
-              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-            });
-          } else {
-            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-          }
-        })
-        .catch(() => {
-          window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-        });
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-    }
-  };
+        const link = document.createElement("a");
 
-  return (
-    <div className="animate-slide-up">
-      {/* Success header */}
-      <div className="text-center mb-6">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-festive-emerald to-emerald-700 mb-4 animate-scale-in">
-          <CheckCircle className="w-9 h-9 text-white" />
-        </div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-          सहभाग यशस्वी नोंदवला! 🎉
-        </h2>
-        <p className="text-white/70 text-sm">
-          तुमचा सेल्फी फोटो आणि माहिती यशस्वीरित्या सबमिट झाली आहे.
-        </p>
-      </div>
+        link.href = selfieDataUrl;
+        link.download = getFileName();
 
-      {/* Status Card Preview */}
-      <div className="glass rounded-3xl p-5 sm:p-6 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="w-5 h-5 text-festive-gold" />
-          <h3 className="text-white font-semibold">तुमचे व्हॉट्सॲप स्टेटस कार्ड</h3>
-        </div>
-        <StatusCard fullName={fullName} selfieDataUrl={selfieDataUrl} />
-      </div>
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
-      {/* Action buttons */}
-      <div className="space-y-3">
-        <button
-          onClick={handleDownload}
-          disabled={downloading}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-festive-orange to-festive-red text-white font-bold text-lg shimmer-btn hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-        >
-          <Download className="w-5 h-5" />
-          स्टेटस कार्ड डाऊनलोड करा
-        </button>
+    const sharePhoto = async () => {
+        if (!selfieDataUrl) {
+            alert("फोटो उपलब्ध नाही.");
+            return;
+        }
 
-        <button
-          onClick={handleWhatsAppShare}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-festive-emerald to-green-700 text-white font-bold text-lg shimmer-btn hover:opacity-90 transition-all flex items-center justify-center gap-2"
-        >
-          <Share2 className="w-5 h-5" />
-          व्हॉट्सॲपवर शेअर करा
-        </button>
+        try {
+            setSharing(true);
 
-        <button
-          onClick={onReset}
-          className="w-full py-3 rounded-xl bg-white/5 border border-white/15 text-white/70 font-medium hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
-        >
-          <RotateCcw className="w-4 h-4" />
-          नवीन सहभाग नोंदवा
-        </button>
-      </div>
-    </div>
-  );
+            const blob =
+                await dataUrlToBlob(selfieDataUrl);
+
+            const file = new File(
+                [blob],
+                getFileName(),
+                {
+                    type: "image/jpeg",
+                }
+            );
+
+            if (
+                navigator.share &&
+                navigator.canShare &&
+                navigator.canShare({
+                    files: [file],
+                })
+            ) {
+                await navigator.share({
+                    title: "गणपती उत्सव",
+                    text: "गणपती बाप्पा मोरया 🙏",
+                    files: [file],
+                });
+
+                return;
+            }
+
+            if (navigator.share) {
+                await navigator.share({
+                    title: "गणपती उत्सव",
+                    text:
+                        "गणपती बाप्पा मोरया 🙏\n\n" +
+                        "मी गणपती उत्सवासाठी सहभागी झालो आहे.",
+                });
+
+                return;
+            }
+
+            const message =
+                "गणपती बाप्पा मोरया 🙏\n\n" +
+                `मी ${ fullName } गणपती उत्सवासाठी सहभागी झालो आहे.`;
+
+            const whatsappUrl =
+                "https://wa.me/?text=" +
+                encodeURIComponent(message);
+
+            window.open(
+                whatsappUrl,
+                "_blank",
+                "noopener,noreferrer"
+            );
+        } catch (error) {
+            console.error(
+                "Share error:",
+                error
+            );
+        } finally {
+            setSharing(false);
+        }
+    };
+
+    return (
+        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-5 sm:px-6 sm:py-10">
+            <div className="mx-auto w-full max-w-2xl">
+                <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl shadow-orange-100/50">
+
+                    {/* Success Header */}
+                    <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-5 py-7 text-center text-white sm:px-8">
+
+                        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white/20 text-3xl">
+                            ✓
+                        </div>
+
+                        <h1 className="text-2xl font-bold sm:text-3xl">
+                            नोंदणी यशस्वी!
+                        </h1>
+
+                        <p className="mt-2 text-sm text-orange-50 sm:text-base">
+                            गणपती उत्सवासाठी तुमचा सहभाग नोंदवला गेला आहे.
+                        </p>
+                    </div>
+
+                    <div className="space-y-5 p-4 sm:p-7">
+
+                        {/* Participant */}
+                        <div className="text-center">
+
+                            <p className="text-sm text-gray-500">
+                                धन्यवाद
+                            </p>
+
+                            <h2 className="mt-1 text-xl font-bold text-gray-900">
+                                {fullName}
+                            </h2>
+
+                        </div>
+
+                        {/* Original Selfie */}
+                        {selfieDataUrl && (
+                            <div className="flex justify-center">
+                                <div className="overflow-hidden rounded-2xl border-4 border-orange-100 bg-orange-50 shadow-lg">
+                                    <img
+                                        src={selfieDataUrl}
+                                        alt="नोंदणीसाठी घेतलेला फोटो"
+                                        className="h-auto max-h-[520px] w-full max-w-md object-cover"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="grid gap-3 sm:grid-cols-2">
+
+                            <button
+                                type="button"
+                                onClick={downloadPhoto}
+                                className="rounded-xl bg-orange-600 px-5 py-3.5 font-bold text-white shadow-md transition hover:bg-orange-700"
+                            >
+                                ⬇️ फोटो जतन करा
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={sharePhoto}
+                                disabled={sharing}
+                                className="rounded-xl border border-orange-300 bg-white px-5 py-3.5 font-bold text-orange-700 transition hover:bg-orange-50 disabled:opacity-60"
+                            >
+                                {sharing
+                                    ? "Share होत आहे..."
+                                    : "↗️ Share करा"}
+                            </button>
+
+                        </div>
+
+                        {/* Reset */}
+                        <button
+                            type="button"
+                            onClick={onReset}
+                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-5 py-3.5 font-semibold text-gray-700 transition hover:bg-gray-100"
+                        >
+                            पुन्हा नोंदणी करा
+                        </button>
+
+                        <p className="text-center text-xs text-gray-400">
+                            गणपती बाप्पा मोरया 🙏
+                        </p>
+
+                    </div>
+                </div>
+            </div>
+        </main>
+    );
 }
