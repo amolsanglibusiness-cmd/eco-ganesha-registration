@@ -111,7 +111,7 @@ export default function SuccessView({
         // STEP 2: FRAME PNG
         ctx.drawImage(frameImgRef.current, 0, 0, canvasW, canvasH);
 
-        // STEP 3: NAME OVERLAY (Anek Devanagari Font)
+        // STEP 3: NAME OVERLAY
         const nameText = fullName.trim();
         let nameBoxBottomY = boxY + boxH - 20;
 
@@ -148,7 +148,7 @@ export default function SuccessView({
             ctx.restore();
         }
 
-        // STEP 4: UNIQUE ID OVERLAY (BELOW NAME WITH WHITE PATCH)
+        // STEP 4: UNIQUE ID OVERLAY
         if (uniqueId) {
             const idText = `ID: ${uniqueId}`;
             const fontSize = Math.round(canvasW * 0.030);
@@ -165,20 +165,17 @@ export default function SuccessView({
             const patchHeight = fontSize + paddingY * 2;
 
             const patchX = (canvasW - patchWidth) / 2;
-            const patchY = nameBoxBottomY + 8; // नामाच्या व्हाईट बॉक्सच्या खाली
+            const patchY = nameBoxBottomY + 8;
 
-            // ID चा व्हाईट बॅकग्राउंड पॅच
             ctx.fillStyle = "#ffffff";
             ctx.beginPath();
             ctx.roundRect(patchX, patchY, patchWidth, patchHeight, 8);
             ctx.fill();
 
-            // पॅचची ऑरेंज बॉर्डर
             ctx.strokeStyle = "#f97316";
             ctx.lineWidth = 1;
             ctx.stroke();
 
-            // ID टेक्स्ट
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillStyle = "#5C2C16";
@@ -226,14 +223,16 @@ export default function SuccessView({
         }
     };
 
-    // SHARE PHOTO (FIXED FOR MOBILE IMAGE SHARING)
+    // ADVANCED ROBUST SHARE FUNCTION WITH FALLBACK
     const sharePhoto = async () => {
         const canvas = previewCanvasRef.current;
         if (!canvas) return;
 
         try {
             setSharing(true);
+            const shareText = `गणपती बाप्पा मोरया 🙏\n\n${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\nUnique ID: ${uniqueId}\n\nनवीन सहभागासाठी नोंदणी करा:\n${FORM_LINK}`;
 
+            // Canvas to Blob Conversion
             const blob = await new Promise<Blob | null>((resolve) =>
                 canvas.toBlob(resolve, "image/jpeg", 0.95)
             );
@@ -243,9 +242,13 @@ export default function SuccessView({
             }
 
             const file = new File([blob], `GanpatiUtsav_${Date.now()}.jpg`, { type: "image/jpeg" });
-            const shareText = `गणपती बाप्पा मोरया 🙏\n\n${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\nUnique ID: ${uniqueId}\n\nनवीन सहभागासाठी नोंदणी करा:\n${FORM_LINK}`;
 
-            if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+            // 1. प्रयत्न १: Web Share API द्वारे Direct File Sharing Check
+            if (
+                navigator.canShare &&
+                navigator.canShare({ files: [file] }) &&
+                navigator.share
+            ) {
                 await navigator.share({
                     title: "गणपती उत्सव",
                     text: shareText,
@@ -254,10 +257,19 @@ export default function SuccessView({
                 return;
             }
 
-            window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
+            // 2. प्रयत्न २: जर इमेज फाईल डायरेक्ट शेअर होत नसेल, तर स्वयंचलित इमेज डाउनलोड करा आणि मेसेज WhatsApp वर पाठवा
+            downloadPhoto();
+            setTimeout(() => {
+                alert("तुमची फोटो इमेज डाउनलोड झाली आहे. आता ती WhatsApp वर शेअर करा!");
+                window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
+            }, 800);
+
         } catch (error: any) {
             if (error.name !== "AbortError") {
                 console.error("Share error:", error);
+                // Fallback option in case sharing fails
+                downloadPhoto();
+                window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
             }
         } finally {
             setSharing(false);
