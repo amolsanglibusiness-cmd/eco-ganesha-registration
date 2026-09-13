@@ -997,11 +997,7 @@ export default function RegistrationForm({
                                     }
                                 />
 
-                                <p className="mt-1.5 text-xs text-gray-500">
-                                    वय 10 ते 80 वर्षांच्या
-                                    दरम्यान असणे आवश्यक आहे.
-                                </p>
-
+                           
                                 {errors.dateOfBirth && (
                                     <p className="mt-1.5 flex items-center gap-1 text-sm font-medium text-red-600">
                                         <span>
