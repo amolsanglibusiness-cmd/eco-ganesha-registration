@@ -20,7 +20,7 @@ export default function SuccessView({
     const [uniqueId, setUniqueId] = useState("");
     const [creatingImage, setCreatingImage] = useState(true);
 
-    // Unique ID Generation
+    // Unique ID Generation (Runs Once)
     useEffect(() => {
         const now = new Date();
         const datePart =
@@ -57,13 +57,12 @@ export default function SuccessView({
     };
 
     /*
-     * Canvas Image Builder - Updated for "share image.png"
+     * Canvas Image Builder
      */
     const createStatusImage = async (): Promise<string> => {
         if (!selfieDataUrl) throw new Error("Selfie image not available.");
         if (!uniqueId) throw new Error("Unique ID not ready.");
 
-        // "share image.png" फाईलचे नाव सेट केले असून encodeURI वापरून लोड केले आहे
         const framePath = encodeURI(`/share image.png?v=${Date.now()}`);
 
         const frameImage = await loadImage(framePath);
@@ -74,7 +73,6 @@ export default function SuccessView({
 
         if (!ctx) throw new Error("Canvas उपलब्ध नाही.");
 
-        // PNG फाईलच्या साईझनुसार कॅनव्हासची रुंदी व उंची सेट होईल
         const canvasWidth = frameImage.naturalWidth || 1200;
         const canvasHeight = frameImage.naturalHeight || 1800;
 
@@ -87,7 +85,6 @@ export default function SuccessView({
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-        // सेल्फी फोटो फ्रेमच्या कट-आऊट खिडकीच्या मागे बसवण्यासाठी पोझिशन
         const selfieBoxX = canvasWidth * 0.08;
         const selfieBoxY = canvasHeight * 0.28;
         const selfieBoxWidth = canvasWidth * 0.84;
@@ -119,64 +116,63 @@ export default function SuccessView({
         ctx.restore();
 
         // ----------------------------------------------------
-        // STEP 2: Main Frame Layer - share image.png (Top Layer)
+        // STEP 2: Main Frame Layer (Top Layer)
         // ----------------------------------------------------
         ctx.drawImage(frameImage, 0, 0, canvasWidth, canvasHeight);
 
         // ----------------------------------------------------
-        // STEP 3: Text Overlay (Top Layer)
+        // STEP 3: Text Overlay (Unique ID & Name)
         // ----------------------------------------------------
 
-        // ----------------------------------------------------
-        // STEP 3: Text Overlay (Top Layer)
-        // ----------------------------------------------------
+        // 1. UNIQUE ID (EXACT TOP CENTER)
+        ctx.save();
+        ctx.shadowBlur = 0;
+        ctx.textAlign = "center"; // horizontal centering
+        ctx.textBaseline = "middle"; // vertical centering
+        ctx.fillStyle = "#5C2C16"; // Dark Chocolate Color
+        ctx.font = `bold ${Math.round(canvasWidth * 0.038)}px Arial, sans-serif`;
 
-        // 1. Unique ID (Top Left)
-        // 1. Unique ID (Top Left - Chocolate Color)
-        ctx.shadowBlur = 0; // शॅडो काढली आहे जेणेकरून रंग स्वच्छ दिसेल
-        ctx.textAlign = "left";
-        ctx.fillStyle = "#5C2C16"; // डार्क चॉकलेटी रंग
-        ctx.font = `bold ${Math.round(canvasWidth * 0.03)}px Arial, sans-serif`;
-        ctx.fillText(`ID: ${uniqueId}`, canvasWidth * 0.05, canvasHeight * 0.13);
+        // X: 0.5 (Dead Center), Y: 0.035 (कार्डच्या अगदी वरच्या मोकळ्या भागात)
+        ctx.fillText(`ID: ${uniqueId}`, canvasWidth * 0.5, canvasHeight * 0.035);
+        ctx.restore();
 
-        // 2. Full Name with White Background Box (Above Bottom Area)
-        ctx.shadowBlur = 0; // Reset Shadow
+        // 2. FULL NAME (With White Background Box)
+        ctx.save();
+        ctx.shadowBlur = 0;
 
         const nameText = fullName.trim();
         const fontSize = Math.round(canvasWidth * 0.042);
         ctx.font = `bold ${fontSize}px Arial, Noto Sans Devanagari, sans-serif`;
 
-        // मोजमाप (Measure Text Length)
         const textMetrics = ctx.measureText(nameText);
         const textWidth = textMetrics.width;
 
-        // बॅकग्राउंड बॉक्सचे डायमेन्शन्स
-        const paddingX = canvasWidth * 0.05; // डाव्या-उजव्या बाजूचे अंतर
-        const paddingY = canvasHeight * 0.012; // वर-खालच्या बाजूचे अंतर
+        const paddingX = canvasWidth * 0.05;
+        const paddingY = canvasHeight * 0.012;
         const boxWidth = textWidth + paddingX * 2;
         const boxHeight = fontSize + paddingY * 2;
 
-        // नाव थोडे वर आणण्यासाठी Y-Position 78% वर सेट केली आहे
         const boxX = (canvasWidth - boxWidth) / 2;
         const boxY = canvasHeight * 0.81 - boxHeight / 2;
-        const cornerRadius = 12; // गोल कोपरे (Rounded Corners)
+        const cornerRadius = 12;
 
-        // A. पांढरा बॅकग्राउंड बॉक्स (White Rounded Rectangle)
+        // White Box Background
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
         ctx.roundRect(boxX, boxY, boxWidth, boxHeight, cornerRadius);
         ctx.fill();
 
-        // (Optional) बॉक्सला हलकी ऑरेंज बॉर्डर
+        // Orange Border
         ctx.strokeStyle = "#e65100";
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // B. नावाचे टेक्स्ट (Text on White Box)
+        // Name Text
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillStyle = "#7a2d00"; // डार्क ब्राऊन/ऑरेंज टेक्स्ट
+        ctx.fillStyle = "#7a2d00";
         ctx.fillText(nameText, canvasWidth / 2, canvasHeight * 0.81);
+        ctx.restore();
 
         return canvas.toDataURL("image/jpeg", 0.92);
     };

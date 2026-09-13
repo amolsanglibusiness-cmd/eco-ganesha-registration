@@ -23,7 +23,7 @@ interface FormErrors {
 }
 
 const GOOGLE_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbwePscZ2zyVQRAKjLyhkeqGqDgOqhvHBneisqrSkIQ460accM8YxRBVFlzV8fyARwmOr/exec";
+    "https://script.google.com/macros/s/AKfycbwvx2I0JJYaUz_qu5Cmx0MH02lt64EQHRfTTfDOQ8_1T-FzPStuCwT1TrXnny8X8k0V/exec";
 
 export default function RegistrationForm({
     onSuccess,
@@ -582,145 +582,60 @@ export default function RegistrationForm({
     ) => {
         event.preventDefault();
 
-        console.log(
-            "SUBMIT BUTTON CLICKED"
-        );
+        const isValid = validate();
 
-        const isValid =
-            validate();
-
-        if (!isValid) {
-            console.log(
-                "FORM VALIDATION FAILED"
-            );
-
-            return;
-        }
-
-        // Prevent Double Submit
-        if (submitting) {
+        if (!isValid || submitting) {
             return;
         }
 
         try {
             setSubmitting(true);
-
             setErrors({});
 
-            const formData = {
-                full_name:
-                    fullName.trim(),
-
-                // Optional field
-                date_of_birth:
-                    dateOfBirth.trim() || "",
-
-                address:
-                    address.trim(),
-
-                mobile_number:
-                    mobileNumber.trim(),
-
-                email:
-                    email.trim() || "",
-
-                selfie_data_url:
-                    selfieDataUrl,
+            const payload = {
+                full_name: fullName.trim(),
+                date_of_birth: dateOfBirth.trim() || "",
+                address: address.trim(),
+                mobile_number: mobileNumber.trim(),
+                email: email.trim() || "",
+                selfie_data_url: selfieDataUrl,
             };
 
-            console.log(
-                "Google Apps Script ला Data पाठवत आहे..."
-            );
-
-            const response =
-                await fetch(
-                    GOOGLE_SCRIPT_URL,
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type":
-                                "text/plain;charset=utf-8",
-                        },
-
-                        body:
-                            JSON.stringify(
-                                formData
-                            ),
-                    }
-                );
-
-            console.log(
-                "Google Script Status:",
-                response.status
-            );
+            // CORS आणि Redirect एरर टाळण्यासाठी text/plain आणि redirect: "follow" वापरा
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8",
+                },
+                body: JSON.stringify(payload),
+                redirect: "follow", // 👈 हे असणे आवश्यक आहे
+            });
 
             if (!response.ok) {
-                throw new Error(
-                    "Google Apps Script response error."
-                );
+                throw new Error("Google Apps Script कडून योग्य रिस्पॉन्स मिळाला नाही.");
             }
 
-            const result =
-                await response.json();
+            const result = await response.json();
 
-            console.log(
-                "Google Script Result:",
-                result
-            );
-
-            if (
-                result.result !==
-                "success"
-            ) {
+            if (result.result !== "success") {
                 throw new Error(
-                    result.message ||
-                    "Google Sheet मध्ये Data Save झाला नाही."
+                    result.message || "डेटा सेव्ह करताना त्रुटी आली."
                 );
             }
-
-            console.log(
-                "DATA SAVED SUCCESSFULLY"
-            );
-
-            console.log(
-                "Unique ID:",
-                result.unique_id
-            );
-
-            console.log(
-                "Drive Photo:",
-                result.photo_url
-            );
 
             onSuccess({
-                fullName:
-                    fullName.trim(),
-
-                selfieDataUrl:
-                    selfieDataUrl,
-
-                uniqueId:
-                    result.unique_id,
-
-                photoUrl:
-                    result.photo_url,
+                fullName: fullName.trim(),
+                selfieDataUrl: selfieDataUrl,
+                uniqueId: result.unique_id,
+                photoUrl: result.photo_url,
             });
         } catch (error) {
-            console.error(
-                "SUBMISSION ERROR:",
-                error
-            );
+            console.error("SUBMISSION ERROR:", error);
 
-            let message =
-                "माहिती जतन करताना समस्या आली. कृपया पुन्हा प्रयत्न करा.";
+            let message = "माहिती जतन करताना समस्या आली. कृपया पुन्हा प्रयत्न करा.";
 
-            if (
-                error instanceof Error &&
-                error.message
-            ) {
-                message =
-                    error.message;
+            if (error instanceof Error && error.message) {
+                message = error.message;
             }
 
             setErrors({
@@ -728,14 +643,10 @@ export default function RegistrationForm({
             });
 
             requestAnimationFrame(() => {
-                termsRef.current?.scrollIntoView(
-                    {
-                        behavior:
-                            "smooth",
-                        block:
-                            "center",
-                    }
-                );
+                termsRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
             });
         } finally {
             setSubmitting(false);
@@ -1136,10 +1047,11 @@ export default function RegistrationForm({
                                 ref={
                                     selfieRef
                                 }
-                                className={`rounded-2xl border ${errors.selfie
+                                className={`rounded-2xl border ${
+                                    errors.selfie
                                         ? "border-red-300 bg-red-50/60"
                                         : "border-orange-100 bg-orange-50/60"
-                                    } p-4`}
+                                } p-4`}
                             >
 
                                 <div className="mb-3">
@@ -1292,10 +1204,11 @@ export default function RegistrationForm({
                                 ref={
                                     termsRef
                                 }
-                                className={`rounded-xl border ${errors.terms
+                                className={`rounded-xl border ${
+                                    errors.terms
                                         ? "border-red-300 bg-red-50"
                                         : "border-gray-200 bg-gray-50"
-                                    } p-4`}
+                                } p-4`}
                             >
 
                                 <label className="flex cursor-pointer items-start gap-3">
