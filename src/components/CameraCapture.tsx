@@ -20,14 +20,14 @@ export default function CameraCapture({ onCapture, capturedImage }: CameraCaptur
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width: { ideal: 1080 },
-          height: { ideal: 1080 },
-          aspectRatio: { ideal: 1 }, // 1:1 Aspect ratio साठी
-        },
-        audio: false,
-      });
+  video: {
+    facingMode: 'user',
+    width: { ideal: 1080 },
+    height: { ideal: 1350 }, // उभ्या फोटोसाठी उंची वाढवली
+    aspectRatio: { ideal: 0.8 }, // 4:5 किंवा Portrait Aspect Ratio
+  },
+  audio: false,
+});
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -60,48 +60,32 @@ export default function CameraCapture({ onCapture, capturedImage }: CameraCaptur
    * अचूक स्क्वेअर (1:1) क्रॉप करून फोटो कॅप्चर करणारे फंक्शन
    */
   const takeSelfie = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return;
+  if (!videoRef.current || !canvasRef.current) return;
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const video = videoRef.current;
+  const canvas = canvasRef.current;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
 
-    // व्हिडीओचा सर्वात लहान भाग घेऊन १:१ साईझ निश्चित केली जाते
-    const targetSize = Math.min(video.videoWidth, video.videoHeight);
-    
-    // आउटपुट कॅनव्हास साईझ (उदा. 1000x1000 px)
-    const exportSize = 1000;
-    canvas.width = exportSize;
-    canvas.height = exportSize;
+  // उभ्या आकारासाठी (Portrait Size: 800 x 1000)
+  const exportWidth = 800;
+  const exportHeight = 1000;
+  
+  canvas.width = exportWidth;
+  canvas.height = exportHeight;
 
-    // व्हिडीओचा मध्यभाग अचूक मोजून क्रॉप केला जातो
-    const sx = (video.videoWidth - targetSize) / 2;
-    const sy = (video.videoHeight - targetSize) / 2;
+  ctx.save();
+  ctx.translate(exportWidth, 0);
+  ctx.scale(-1, 1);
 
-    ctx.save();
-    // 1:1 मध्ये प्रिव्ह्यू प्रमाणे फोटो मिरर (Horizontal Flip) करा
-    ctx.translate(exportSize, 0);
-    ctx.scale(-1, 1);
-    
-    // व्हिडिओमधील नक्की प्रिव्ह्यू एवढाच भाग drawImage ने घेतला जातो
-    ctx.drawImage(
-      video,
-      sx,
-      sy,
-      targetSize,
-      targetSize,
-      0,
-      0,
-      exportSize,
-      exportSize
-    );
-    ctx.restore();
+  // पूर्ण व्हिडिओ फ्रेम योग्यरित्या बसवण्यासाठी drawImage
+  ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, exportWidth, exportHeight);
+  ctx.restore();
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    onCapture(dataUrl);
-    stopCamera();
-  }, [onCapture, stopCamera]);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  onCapture(dataUrl);
+  stopCamera();
+}, [onCapture, stopCamera]);
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -177,7 +161,7 @@ export default function CameraCapture({ onCapture, capturedImage }: CameraCaptur
       />
 
       {/* Camera View / Preview Container (Fixed 1:1 Box) */}
-      <div className="relative aspect-square w-full max-w-sm mx-auto overflow-hidden rounded-2xl border-2 border-white/10 bg-black/40 shadow-inner">
+      <div className="relative aspect-[4/5] w-full max-w-sm mx-auto overflow-hidden rounded-2xl border-2 border-white/10 bg-black/40 shadow-inner">
         {!hasImage ? (
           <>
             <video

@@ -23,7 +23,7 @@ interface FormErrors {
 }
 
 const GOOGLE_SCRIPT_URL =
-    "https://script.google.com/macros/s/AKfycbwePscZ2zyVQRAKjLyhkeGqDgOqhvHBneisqrSkIQ460accM8YxRBVFlzV8fyARwmOr/exec";
+    "https://script.google.com/macros/s/AKfycbwePscZ2zyVQRAKjLyhkeqGqDgOqhvHBneisqrSkIQ460accM8YxRBVFlzV8fyARwmOr/exec";
 
 export default function RegistrationForm({
     onSuccess,
@@ -79,44 +79,6 @@ export default function RegistrationForm({
 
             return updated;
         });
-    };
-
-    // -----------------------------------------
-    // जन्मतारखेची 10 ते 80 वर्षांची मर्यादा
-    // -----------------------------------------
-    const getDateLimits = () => {
-        const today = new Date();
-
-        // किमान वय 10 वर्षे
-        const maxDate = new Date(
-            today.getFullYear() - 10,
-            today.getMonth(),
-            today.getDate()
-        );
-
-        // कमाल वय 80 वर्षे
-        const minDate = new Date(
-            today.getFullYear() - 80,
-            today.getMonth(),
-            today.getDate()
-        );
-
-        const formatDate = (date: Date) => {
-            const year = date.getFullYear();
-            const month = String(
-                date.getMonth() + 1
-            ).padStart(2, "0");
-            const day = String(
-                date.getDate()
-            ).padStart(2, "0");
-
-            return `${year}-${month}-${day}`;
-        };
-
-        return {
-            minDate: formatDate(minDate),
-            maxDate: formatDate(maxDate),
-        };
     };
 
     // -----------------------------------------
@@ -391,9 +353,7 @@ export default function RegistrationForm({
     const validate = (): boolean => {
         const newErrors: FormErrors = {};
 
-        // -------------------------------------
         // नाव
-        // -------------------------------------
         if (
             !fullName.trim()
         ) {
@@ -406,13 +366,10 @@ export default function RegistrationForm({
                 "पूर्ण नाव किमान 3 अक्षरांचे असावे.";
         }
 
-        // -------------------------------------
         // जन्मतारीख
-        // -------------------------------------
-        if (!dateOfBirth) {
-            newErrors.dateOfBirth =
-                "कृपया जन्मतारीख निवडा.";
-        } else {
+        // OPTIONAL FIELD
+        // येथे कोणतीही compulsory validation नाही.
+        if (dateOfBirth.trim()) {
             const selectedDate =
                 new Date(
                     `${dateOfBirth}T00:00:00`
@@ -428,38 +385,18 @@ export default function RegistrationForm({
                 0
             );
 
-            // 80 वर्षांपूर्वीची तारीख
-            const minAllowedDate =
-                new Date(
-                    today.getFullYear() -
-                    80,
-                    today.getMonth(),
-                    today.getDate()
-                );
-
-            // 10 वर्षांपूर्वीची तारीख
-            const maxAllowedDate =
-                new Date(
-                    today.getFullYear() -
-                    10,
-                    today.getMonth(),
-                    today.getDate()
-                );
-
             if (
-                selectedDate <
-                minAllowedDate ||
-                selectedDate >
-                maxAllowedDate
+                Number.isNaN(
+                    selectedDate.getTime()
+                ) ||
+                selectedDate > today
             ) {
                 newErrors.dateOfBirth =
-                    "वय 10 ते 80 वर्षांच्या दरम्यान असणे आवश्यक आहे.";
+                    "कृपया योग्य जन्मतारीख निवडा.";
             }
         }
 
-        // -------------------------------------
         // पत्ता
-        // -------------------------------------
         if (
             !address.trim()
         ) {
@@ -472,9 +409,7 @@ export default function RegistrationForm({
                 "पूर्ण पत्ता किमान 3 अक्षरांचा असावा.";
         }
 
-        // -------------------------------------
         // Mobile
-        // -------------------------------------
         if (
             !mobileNumber.trim()
         ) {
@@ -489,9 +424,7 @@ export default function RegistrationForm({
                 "10 अंकी योग्य मोबाईल नंबर प्रविष्ट करा.";
         }
 
-        // -------------------------------------
         // Email
-        // -------------------------------------
         if (
             email.trim() &&
             !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
@@ -502,17 +435,13 @@ export default function RegistrationForm({
                 "योग्य ई-मेल पत्ता प्रविष्ट करा.";
         }
 
-        // -------------------------------------
         // Photo
-        // -------------------------------------
         if (!selfieDataUrl) {
             newErrors.selfie =
                 "फोटो काढणे किंवा अपलोड करणे आवश्यक आहे.";
         }
 
-        // -------------------------------------
         // Terms
-        // -------------------------------------
         if (!termsAccepted) {
             newErrors.terms =
                 "अटी व नियम स्वीकारणे आवश्यक आहे.";
@@ -520,15 +449,14 @@ export default function RegistrationForm({
 
         setErrors(newErrors);
 
-        // -------------------------------------
         // पहिल्या चुकीच्या field कडे scroll
-        // -------------------------------------
         if (
             Object.keys(
                 newErrors
             ).length > 0
         ) {
             requestAnimationFrame(() => {
+
                 if (
                     newErrors.fullName
                 ) {
@@ -540,6 +468,7 @@ export default function RegistrationForm({
                                 "center",
                         }
                     );
+
                     fullNameRef.current?.focus();
                     return;
                 }
@@ -555,6 +484,7 @@ export default function RegistrationForm({
                                 "center",
                         }
                     );
+
                     dateOfBirthRef.current?.focus();
                     return;
                 }
@@ -570,6 +500,7 @@ export default function RegistrationForm({
                                 "center",
                         }
                     );
+
                     addressRef.current?.focus();
                     return;
                 }
@@ -585,6 +516,7 @@ export default function RegistrationForm({
                                 "center",
                         }
                     );
+
                     mobileNumberRef.current?.focus();
                     return;
                 }
@@ -600,6 +532,7 @@ export default function RegistrationForm({
                                 "center",
                         }
                     );
+
                     emailRef.current?.focus();
                     return;
                 }
@@ -615,6 +548,7 @@ export default function RegistrationForm({
                                 "center",
                         }
                     );
+
                     return;
                 }
 
@@ -652,9 +586,6 @@ export default function RegistrationForm({
             "SUBMIT BUTTON CLICKED"
         );
 
-        // -----------------------------------------
-        // Validation
-        // -----------------------------------------
         const isValid =
             validate();
 
@@ -666,9 +597,7 @@ export default function RegistrationForm({
             return;
         }
 
-        // -----------------------------------------
         // Prevent Double Submit
-        // -----------------------------------------
         if (submitting) {
             return;
         }
@@ -678,15 +607,13 @@ export default function RegistrationForm({
 
             setErrors({});
 
-            // -------------------------------------
-            // Data तयार करा
-            // -------------------------------------
             const formData = {
                 full_name:
                     fullName.trim(),
 
+                // Optional field
                 date_of_birth:
-                    dateOfBirth,
+                    dateOfBirth.trim() || "",
 
                 address:
                     address.trim(),
@@ -705,9 +632,6 @@ export default function RegistrationForm({
                 "Google Apps Script ला Data पाठवत आहे..."
             );
 
-            // -------------------------------------
-            // Google Apps Script
-            // -------------------------------------
             const response =
                 await fetch(
                     GOOGLE_SCRIPT_URL,
@@ -737,9 +661,6 @@ export default function RegistrationForm({
                 );
             }
 
-            // -------------------------------------
-            // Response
-            // -------------------------------------
             const result =
                 await response.json();
 
@@ -748,9 +669,6 @@ export default function RegistrationForm({
                 result
             );
 
-            // -------------------------------------
-            // Error
-            // -------------------------------------
             if (
                 result.result !==
                 "success"
@@ -761,9 +679,6 @@ export default function RegistrationForm({
                 );
             }
 
-            // -------------------------------------
-            // Success
-            // -------------------------------------
             console.log(
                 "DATA SAVED SUCCESSFULLY"
             );
@@ -778,9 +693,6 @@ export default function RegistrationForm({
                 result.photo_url
             );
 
-            // -------------------------------------
-            // Success Page
-            // -------------------------------------
             onSuccess({
                 fullName:
                     fullName.trim(),
@@ -834,6 +746,10 @@ export default function RegistrationForm({
         <>
             <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-4 sm:px-6 sm:py-8">
                 <div className="mx-auto w-full max-w-2xl">
+
+                    {/* =========================
+                        Main White Box
+                    ========================== */}
                     <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl shadow-orange-100/50">
 
                         {/* =========================
@@ -858,7 +774,7 @@ export default function RegistrationForm({
                             onSubmit={
                                 handleSubmit
                             }
-                            className="space-y-5 p-4 sm:p-7"
+                            className="space-y-5 rounded-b-3xl bg-white p-4 sm:p-7"
                         >
 
                             {/* Full Name */}
@@ -939,69 +855,9 @@ export default function RegistrationForm({
                                         <span>
                                             ⚠️
                                         </span>
+
                                         {
                                             errors.fullName
-                                        }
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* DOB */}
-                            <div>
-                                <label className="mb-2 block text-sm font-semibold text-gray-800">
-                                    जन्मतारीख{" "}
-                                    <span className="text-red-500">
-                                        *
-                                    </span>
-                                </label>
-
-                                <input
-                                    ref={
-                                        dateOfBirthRef
-                                    }
-                                    type="date"
-                                    value={
-                                        dateOfBirth
-                                    }
-                                    min={
-                                        getDateLimits()
-                                            .minDate
-                                    }
-                                    max={
-                                        getDateLimits()
-                                            .maxDate
-                                    }
-                                    onChange={(
-                                        e
-                                    ) => {
-                                        setDateOfBirth(
-                                            e
-                                                .target
-                                                .value
-                                        );
-
-                                        clearError(
-                                            "dateOfBirth"
-                                        );
-                                    }}
-                                    className={
-                                        errors.dateOfBirth
-                                            ? errorInputClass
-                                            : inputClass
-                                    }
-                                    aria-invalid={
-                                        !!errors.dateOfBirth
-                                    }
-                                />
-
-                           
-                                {errors.dateOfBirth && (
-                                    <p className="mt-1.5 flex items-center gap-1 text-sm font-medium text-red-600">
-                                        <span>
-                                            ⚠️
-                                        </span>
-                                        {
-                                            errors.dateOfBirth
                                         }
                                     </p>
                                 )}
@@ -1049,6 +905,7 @@ export default function RegistrationForm({
                                         <span>
                                             ⚠️
                                         </span>
+
                                         {
                                             errors.address
                                         }
@@ -1130,8 +987,71 @@ export default function RegistrationForm({
                                         <span>
                                             ⚠️
                                         </span>
+
                                         {
                                             errors.mobileNumber
+                                        }
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* =========================
+                                DOB - OPTIONAL
+                            ========================== */}
+                            <div>
+                                <label className="mb-2 block text-sm font-semibold text-gray-800">
+                                    जन्मतारीख{" "}
+                                    <span className="text-gray-400">
+                                        (ऐच्छिक)
+                                    </span>
+                                </label>
+
+                                <input
+                                    ref={
+                                        dateOfBirthRef
+                                    }
+                                    type="date"
+                                    value={
+                                        dateOfBirth
+                                    }
+                                    max={
+                                        new Date()
+                                            .toISOString()
+                                            .split(
+                                                "T"
+                                            )[0]
+                                    }
+                                    onChange={(
+                                        e
+                                    ) => {
+                                        setDateOfBirth(
+                                            e
+                                                .target
+                                                .value
+                                        );
+
+                                        clearError(
+                                            "dateOfBirth"
+                                        );
+                                    }}
+                                    className={
+                                        errors.dateOfBirth
+                                            ? errorInputClass
+                                            : inputClass
+                                    }
+                                    aria-invalid={
+                                        !!errors.dateOfBirth
+                                    }
+                                />
+
+                                {errors.dateOfBirth && (
+                                    <p className="mt-1.5 flex items-center gap-1 text-sm font-medium text-red-600">
+                                        <span>
+                                            ⚠️
+                                        </span>
+
+                                        {
+                                            errors.dateOfBirth
                                         }
                                     </p>
                                 )}
@@ -1201,6 +1121,7 @@ export default function RegistrationForm({
                                         <span>
                                             ⚠️
                                         </span>
+
                                         {
                                             errors.email
                                         }
@@ -1229,12 +1150,12 @@ export default function RegistrationForm({
                                         </span>
                                     </h2>
 
-                                   <p className="mt-1 text-sm text-gray-500">
-  कॅमेरातून फोटो काढा{" "}
-  <span className="hidden md:inline">
-    संगणकावरून निवडा
-  </span>
-</p>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        कॅमेरातून फोटो काढा{" "}
+                                        <span className="hidden md:inline">
+                                            संगणकावरून निवडा
+                                        </span>
+                                    </p>
                                 </div>
 
                                 {/* Hidden File Input */}
@@ -1356,6 +1277,7 @@ export default function RegistrationForm({
                                         <span>
                                             ⚠️
                                         </span>
+
                                         {
                                             errors.selfie
                                         }
@@ -1434,6 +1356,7 @@ export default function RegistrationForm({
                                         <span>
                                             ⚠️
                                         </span>
+
                                         {
                                             errors.terms
                                         }
@@ -1455,14 +1378,20 @@ export default function RegistrationForm({
                                     ? "नोंदणी जतन होत आहे..."
                                     : "गणपती उत्सवासाठी सहभागी व्हा"}
                             </button>
-                            </form>
-<div className="w-full overflow-hidden">
-  <img
-    src="/sponsor-logo.png"
-    alt="प्रायोजक लोगो"
-    className="block w-full h-auto object-cover"
-  />
-</div>
+
+                        </form>
+
+                        {/* =========================
+                            Sponsor Image
+                        ========================== */}
+                        <div className="w-full overflow-hidden">
+                            <img
+                                src="/sponsor-logo.png"
+                                alt="प्रायोजक लोगो"
+                                className="block h-auto w-full object-cover"
+                            />
+                        </div>
+
                     </div>
                 </div>
             </div>
