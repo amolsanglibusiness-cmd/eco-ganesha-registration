@@ -1229,10 +1229,12 @@ export default function RegistrationForm({
                                         </span>
                                     </h2>
 
-                                    <p className="mt-1 text-sm text-gray-500">
-                                        कॅमेरातून फोटो काढा किंवा
-                                        संगणकावरून निवडा
-                                    </p>
+                                   <p className="mt-1 text-sm text-gray-500">
+  कॅमेरातून फोटो काढा{" "}
+  <span className="hidden md:inline">
+    संगणकावरून निवडा
+  </span>
+</p>
                                 </div>
 
                                 {/* Hidden File Input */}
@@ -1453,8 +1455,14 @@ export default function RegistrationForm({
                                     ? "नोंदणी जतन होत आहे..."
                                     : "गणपती उत्सवासाठी सहभागी व्हा"}
                             </button>
-
-                        </form>
+                            </form>
+<div className="w-full overflow-hidden">
+  <img
+    src="/sponsor-logo.png"
+    alt="प्रायोजक लोगो"
+    className="block w-full h-auto object-cover"
+  />
+</div>
                     </div>
                 </div>
             </div>
