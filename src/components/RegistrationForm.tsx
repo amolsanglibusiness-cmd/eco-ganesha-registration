@@ -839,19 +839,16 @@ export default function RegistrationForm({
                         {/* =========================
                             Header
                         ========================== */}
-                        <div className="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-500 to-amber-500 px-5 py-7 text-center text-white sm:px-8 sm:py-9">
-
-                            <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/10" />
-
-                            <div className="absolute -bottom-20 -left-16 h-44 w-44 rounded-full bg-white/10" />
+                        <div className="relative overflow-hidden bg-white p-0 text-center">
 
                             <div className="relative">
                                 <img
                                     src="/ganpati-header.png"
                                     alt="श्री गणेश उत्सव"
-                                    className="mx-auto h-auto w-full max-w-[1200px] object-contain"
+                                    className="block h-auto w-full object-contain"
                                 />
                             </div>
+
                         </div>
 
                         {/* =========================
