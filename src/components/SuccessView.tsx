@@ -226,21 +226,26 @@ export default function SuccessView({
         }
     };
 
-    // SHARE PHOTO
+    // SHARE PHOTO (FIXED FOR MOBILE IMAGE SHARING)
     const sharePhoto = async () => {
         const canvas = previewCanvasRef.current;
         if (!canvas) return;
 
         try {
             setSharing(true);
-            const imageData = canvas.toDataURL("image/jpeg", 0.95);
-            const res = await fetch(imageData);
-            const blob = await res.blob();
-            const file = new File([blob], "GanpatiUtsav.jpg", { type: "image/jpeg" });
 
+            const blob = await new Promise<Blob | null>((resolve) =>
+                canvas.toBlob(resolve, "image/jpeg", 0.95)
+            );
+
+            if (!blob) {
+                throw new Error("Blob creation failed");
+            }
+
+            const file = new File([blob], `GanpatiUtsav_${Date.now()}.jpg`, { type: "image/jpeg" });
             const shareText = `गणपती बाप्पा मोरया 🙏\n\n${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\nUnique ID: ${uniqueId}\n\nनवीन सहभागासाठी नोंदणी करा:\n${FORM_LINK}`;
 
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
                 await navigator.share({
                     title: "गणपती उत्सव",
                     text: shareText,
@@ -250,8 +255,10 @@ export default function SuccessView({
             }
 
             window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
-        } catch (error) {
-            console.error("Share error:", error);
+        } catch (error: any) {
+            if (error.name !== "AbortError") {
+                console.error("Share error:", error);
+            }
         } finally {
             setSharing(false);
         }
