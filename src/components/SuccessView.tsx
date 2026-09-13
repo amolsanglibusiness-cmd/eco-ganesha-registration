@@ -30,15 +30,8 @@ export default function SuccessView({
     const [sharing, setSharing] = useState(false);
     const [uniqueId, setUniqueId] = useState("");
     const [saving, setSaving] = useState(false);
-    const [showDragHint, setShowDragHint] = useState(true);
 
-    const posYRef = useRef(0);
     const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
-    const isDragging = useRef(false);
-    const dragStartClientY = useRef(0);
-    const dragStartPosY = useRef(0);
-
     const selfieImgRef = useRef<HTMLImageElement | null>(null);
     const frameImgRef = useRef<HTMLImageElement | null>(null);
 
@@ -70,7 +63,7 @@ export default function SuccessView({
         });
     };
 
-    // LAYOUT CALCULATION
+    // LAYOUT CALCULATION (Auto Centered Photo)
     const getPhotoLayout = useCallback(() => {
         const selfie = selfieImgRef.current;
         if (!selfie) return null;
@@ -80,12 +73,11 @@ export default function SuccessView({
         const scale = Math.max(boxW / selfie.width, boxH / selfie.height);
         const drawW = selfie.width * scale;
         const drawH = selfie.height * scale;
+
         const drawX = boxX + (boxW - drawW) / 2;
+        const drawY = boxY + (boxH - drawH) / 2;
 
-        const minY = boxY + boxH - drawH;
-        const maxY = boxY;
-
-        return { boxX, boxY, boxW, boxH, drawW, drawH, drawX, minY, maxY };
+        return { boxX, boxY, boxW, boxH, drawW, drawH, drawX, drawY };
     }, []);
 
     // CANVAS DRAWING
@@ -106,11 +98,7 @@ export default function SuccessView({
         const layout = getPhotoLayout();
         if (!layout) return;
 
-        const { boxX, boxY, boxW, boxH, drawW, drawH, drawX, minY, maxY } = layout;
-
-        const requestedY = boxY + posYRef.current;
-        const drawY = Math.min(maxY, Math.max(minY, requestedY));
-        posYRef.current = drawY - boxY;
+        const { boxX, boxY, boxW, boxH, drawW, drawH, drawX, drawY } = layout;
 
         // STEP 1: PHOTO CLIPPING
         ctx.save();
@@ -125,7 +113,7 @@ export default function SuccessView({
 
         // STEP 3: NAME OVERLAY (Anek Devanagari Font)
         const nameText = fullName.trim();
-        let nameBoxBottomY = boxY + boxH - 20; // Default position for ID reference
+        let nameBoxBottomY = boxY + boxH - 20;
 
         if (nameText) {
             const fontSize = Math.round(canvasW * 0.048);
@@ -142,9 +130,8 @@ export default function SuccessView({
             const nameBoxX = (canvasW - nameBoxW) / 2;
             const nameBoxY = boxY + boxH - nameBoxH / 2 - 15;
 
-            nameBoxBottomY = nameBoxY + nameBoxH; // नामाच्या खालील Y पोझिशन
+            nameBoxBottomY = nameBoxY + nameBoxH;
 
-            // नावाचा व्हाईट बॉक्स
             ctx.fillStyle = "#ffffff";
             ctx.beginPath();
             ctx.roundRect(nameBoxX, nameBoxY, nameBoxW, nameBoxH, 10);
@@ -154,7 +141,6 @@ export default function SuccessView({
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // नावाचे प्रिंटींग
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillStyle = "#7a2d00";
@@ -179,7 +165,7 @@ export default function SuccessView({
             const patchHeight = fontSize + paddingY * 2;
 
             const patchX = (canvasW - patchWidth) / 2;
-            const patchY = nameBoxBottomY + 8; // नावाच्या बॉक्सच्या ८ पिक्सेल खाली
+            const patchY = nameBoxBottomY + 8; // नामाच्या व्हाईट बॉक्सच्या खाली
 
             // ID चा व्हाईट बॅकग्राउंड पॅच
             ctx.fillStyle = "#ffffff";
@@ -187,7 +173,7 @@ export default function SuccessView({
             ctx.roundRect(patchX, patchY, patchWidth, patchHeight, 8);
             ctx.fill();
 
-            // पॅचची बॉर्डर
+            // पॅचची ऑरेंज बॉर्डर
             ctx.strokeStyle = "#f97316";
             ctx.lineWidth = 1;
             ctx.stroke();
@@ -206,65 +192,16 @@ export default function SuccessView({
     useEffect(() => {
         if (!selfieDataUrl) return;
 
-        setShowDragHint(true);
         const framePath = encodeURI(`/share image.png?v=${Date.now()}`);
 
         Promise.all([loadImage(selfieDataUrl), loadImage(framePath)])
             .then(([selfieImg, frameImg]) => {
                 selfieImgRef.current = selfieImg;
                 frameImgRef.current = frameImg;
-
-                const layout = getPhotoLayout();
-                if (layout) {
-                    posYRef.current = (layout.boxH - layout.drawH) / 2;
-                } else {
-                    posYRef.current = 0;
-                }
                 drawCanvas();
             })
             .catch((err) => console.error("Image load error:", err));
-    }, [selfieDataUrl, getPhotoLayout, drawCanvas]);
-
-    // DRAG HANDLERS
-    const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-        setShowDragHint(false);
-        isDragging.current = true;
-        const clientY = "touches" in e ? e.touches[0]?.clientY : e.clientY;
-
-        if (typeof clientY === "number") {
-            dragStartClientY.current = clientY;
-            dragStartPosY.current = posYRef.current;
-        }
-    };
-
-    const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-        if (!isDragging.current) return;
-
-        const clientY = "touches" in e ? e.touches[0]?.clientY : e.clientY;
-        const canvas = previewCanvasRef.current;
-
-        if (typeof clientY !== "number" || !canvas) return;
-
-        const rect = canvas.getBoundingClientRect();
-        if (!rect.height) return;
-
-        const scaleY = FRAME_CONFIG.CANVAS_HEIGHT / rect.height;
-        const deltaY = (clientY - dragStartClientY.current) * scaleY;
-        let newPosY = dragStartPosY.current + deltaY;
-
-        const layout = getPhotoLayout();
-        if (layout) {
-            const minPosY = layout.boxH - layout.drawH;
-            newPosY = Math.min(0, Math.max(minPosY, newPosY));
-        }
-
-        posYRef.current = newPosY;
-        requestAnimationFrame(drawCanvas);
-    };
-
-    const handleMouseUp = () => {
-        isDragging.current = false;
-    };
+    }, [selfieDataUrl, drawCanvas]);
 
     // DOWNLOAD PHOTO
     const downloadPhoto = () => {
@@ -338,36 +275,11 @@ export default function SuccessView({
                         </div>
 
                         <div className="space-y-4">
-                            <p className="text-center text-xs font-semibold text-orange-800 sm:text-sm">
-                                फोटो योग्य जागी सेट करण्यासाठी फोटोवर बोटाने / माऊसने वर-खाली सरकवा
-                            </p>
-
                             <div className="relative flex justify-center">
                                 <canvas
                                     ref={previewCanvasRef}
-                                    className="w-[340px] max-w-full cursor-ns-resize touch-none rounded-2xl border-4 border-orange-400 bg-white shadow-2xl active:border-orange-600"
-                                    onMouseDown={handleMouseDown}
-                                    onMouseMove={handleMouseMove}
-                                    onMouseUp={handleMouseUp}
-                                    onMouseLeave={handleMouseUp}
-                                    onTouchStart={handleMouseDown}
-                                    onTouchMove={handleMouseMove}
-                                    onTouchEnd={handleMouseUp}
-                                    onTouchCancel={handleMouseUp}
+                                    className="w-[340px] max-w-full rounded-2xl border-4 border-orange-400 bg-white shadow-2xl"
                                 />
-
-                                {showDragHint && (
-                                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
-                                        <div className="flex flex-col items-center">
-                                            <div className="select-none text-6xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.45)] sm:text-7xl" style={{ animation: "dragHand 1.2s ease-in-out infinite" }}>
-                                                👆
-                                            </div>
-                                            <div className="mt-2 rounded-full bg-black/65 px-4 py-1.5 text-xs font-bold text-white shadow-lg">
-                                                वर ↕️ खाली सरकवा
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
 
                             <div className="grid gap-3 sm:grid-cols-2">
@@ -401,13 +313,6 @@ export default function SuccessView({
                     </div>
                 </div>
             </div>
-
-            <style>{`
-        @keyframes dragHand {
-          0%, 100% { transform: translateY(-20px); }
-          50% { transform: translateY(20px); }
-        }
-      `}</style>
         </main>
     );
 }
