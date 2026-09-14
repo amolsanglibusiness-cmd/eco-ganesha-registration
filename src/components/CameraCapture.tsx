@@ -68,7 +68,6 @@ export default function CameraCapture({
 
             stopCamera();
 
-            // मोबाईल व पीसीवर थेट फ्रंट कॅमेरा उघडण्यासाठी Constraints
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: 'user',
@@ -85,7 +84,6 @@ export default function CameraCapture({
                 videoRef.current.muted = true;
                 videoRef.current.playsInline = true;
 
-                // iOS / Chrome ऑटोप्लेसाठी playsinline सेट करणे
                 videoRef.current.setAttribute('playsinline', 'true');
 
                 await videoRef.current.play();
@@ -134,7 +132,7 @@ export default function CameraCapture({
     }, [stopCamera]);
 
     // =====================================================
-    // TAKE SQUARE SELFIE
+    // TAKE SELFIE (Frame Box Ratio 528:382 नुसार उंची कमी केली आहे)
     // =====================================================
 
     const takeSelfie = useCallback(() => {
@@ -146,10 +144,6 @@ export default function CameraCapture({
 
         if (!ctx) return;
 
-        const exportSize = 1000;
-        canvas.width = exportSize;
-        canvas.height = exportSize;
-
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
 
@@ -160,24 +154,41 @@ export default function CameraCapture({
             return;
         }
 
-        const sourceSize = Math.min(videoWidth, videoHeight);
-        const sourceX = (videoWidth - sourceSize) / 2;
-        const sourceY = (videoHeight - sourceSize) / 2;
+        // फ्रेममधील बॉक्सची साईज (528x382) -> Ratio = 528 / 382
+        const targetRatio = 528 / 382;
+
+        let sourceW = videoWidth;
+        let sourceH = videoWidth / targetRatio;
+
+        if (sourceH > videoHeight) {
+            sourceH = videoHeight;
+            sourceW = videoHeight * targetRatio;
+        }
+
+        const sourceX = (videoWidth - sourceW) / 2;
+        const sourceY = (videoHeight - sourceH) / 2;
+
+        // Canvas वर फोटो एक्सपोर्ट करताना फ्रेमच्या आकाराशी सुसंगत ठेवणे
+        const exportWidth = 1000;
+        const exportHeight = Math.round(exportWidth / targetRatio);
+
+        canvas.width = exportWidth;
+        canvas.height = exportHeight;
 
         ctx.save();
-        ctx.translate(exportSize, 0);
+        ctx.translate(exportWidth, 0);
         ctx.scale(-1, 1);
 
         ctx.drawImage(
             video,
             sourceX,
             sourceY,
-            sourceSize,
-            sourceSize,
+            sourceW,
+            sourceH,
             0,
             0,
-            exportSize,
-            exportSize
+            exportWidth,
+            exportHeight
         );
 
         ctx.restore();
@@ -189,7 +200,7 @@ export default function CameraCapture({
     }, [onCapture, stopCamera]);
 
     // =====================================================
-    // GALLERY PHOTO -> SQUARE
+    // GALLERY PHOTO UPLOAD (Frame Box Ratio 528:382)
     // =====================================================
 
     const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -226,24 +237,36 @@ export default function CameraCapture({
 
                 if (!ctx) return;
 
-                const exportSize = 1000;
-                canvas.width = exportSize;
-                canvas.height = exportSize;
+                // फ्रेममधील बॉक्सची साईज (528x382) -> Ratio = 528 / 382
+                const targetRatio = 528 / 382;
 
-                const sourceSize = Math.min(img.width, img.height);
-                const sourceX = (img.width - sourceSize) / 2;
-                const sourceY = (img.height - sourceSize) / 2;
+                let sourceW = img.width;
+                let sourceH = img.width / targetRatio;
+
+                if (sourceH > img.height) {
+                    sourceH = img.height;
+                    sourceW = img.height * targetRatio;
+                }
+
+                const sourceX = (img.width - sourceW) / 2;
+                const sourceY = (img.height - sourceH) / 2;
+
+                const exportWidth = 1000;
+                const exportHeight = Math.round(exportWidth / targetRatio);
+
+                canvas.width = exportWidth;
+                canvas.height = exportHeight;
 
                 ctx.drawImage(
                     img,
                     sourceX,
                     sourceY,
-                    sourceSize,
-                    sourceSize,
+                    sourceW,
+                    sourceH,
                     0,
                     0,
-                    exportSize,
-                    exportSize
+                    exportWidth,
+                    exportHeight
                 );
 
                 const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
@@ -317,8 +340,8 @@ export default function CameraCapture({
                 className="hidden"
             />
 
-            {/* SQUARE CAMERA PREVIEW */}
-            <div className="relative aspect-square w-full max-w-sm mx-auto overflow-hidden rounded-2xl border-2 border-white/10 bg-black/40 shadow-inner">
+            {/* CAMERA PREVIEW */}
+            <div className="relative aspect-[528/382] w-full max-w-sm mx-auto overflow-hidden rounded-2xl border-2 border-white/10 bg-black/40 shadow-inner">
                 {!hasImage ? (
                     <>
                         {/* VIDEO */}
@@ -361,7 +384,7 @@ export default function CameraCapture({
                             </div>
                         )}
 
-                        {/* SQUARE CAMERA GUIDE */}
+                        {/* CAMERA GUIDE */}
                         {isStreaming && (
                             <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-dashed border-white/40">
                                 <div className="absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-festive-gold to-transparent animate-pulse" />
