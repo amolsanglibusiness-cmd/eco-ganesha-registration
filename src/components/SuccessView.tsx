@@ -296,7 +296,13 @@ export default function SuccessView({
 
         try {
             setSharing(true);
-            const shareText = `गणपती बाप्पा मोरया 🙏\n\n${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\nUnique ID: ${uniqueId}\n\nनवीन सहभागासाठी नोंदणी करा:\n${FORM_LINK}`;
+
+            // सुधारित मेसेज (दिलेली नवीन माहिती जोडली आहे)
+            const shareText = `गणपती बाप्पा मोरया 🙏\n\n` +
+                `${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\n` +
+                `दैनिक तरुण भारत संवादच्या निर्माल्य संकलन मोहिमेत सहभागी विद्यार्थी आणि घरगुती गणपती सजावट स्पर्धेत सहभाग घेतलेल्या महिलांनी येथे फोटो आणि माहिती अपलोड करा आणि मिळवा आकर्षक सेल्फी स्टेटस.\n\n` +
+                `Unique ID: ${uniqueId}\n\n` +
+                `नवीन सहभागासाठी नोंदणी करा:\n${FORM_LINK}`;
 
             const blob = await new Promise<Blob | null>((resolve) =>
                 canvas.toBlob(resolve, "image/jpeg", 0.95)
