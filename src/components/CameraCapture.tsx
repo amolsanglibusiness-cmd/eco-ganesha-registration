@@ -132,7 +132,7 @@ export default function CameraCapture({
     }, [stopCamera]);
 
     // =====================================================
-    // TAKE SELFIE (Frame Box Ratio 528:382 नुसार उंची कमी केली आहे)
+    // TAKE SELFIE (528:382 Aspect Ratio प्रमाणे उंची अ‍ॅडजस्ट केली आहे)
     // =====================================================
 
     const takeSelfie = useCallback(() => {
@@ -154,12 +154,13 @@ export default function CameraCapture({
             return;
         }
 
-        // फ्रेममधील बॉक्सची साईज (528x382) -> Ratio = 528 / 382
+        // फ्रेमचा रेशो (528 / 382)
         const targetRatio = 528 / 382;
 
         let sourceW = videoWidth;
         let sourceH = videoWidth / targetRatio;
 
+        // जर सोर्स उंची व्हिडिओच्या उंचीपेक्षा जास्त होत असेल तर
         if (sourceH > videoHeight) {
             sourceH = videoHeight;
             sourceW = videoHeight * targetRatio;
@@ -168,9 +169,9 @@ export default function CameraCapture({
         const sourceX = (videoWidth - sourceW) / 2;
         const sourceY = (videoHeight - sourceH) / 2;
 
-        // Canvas वर फोटो एक्सपोर्ट करताना फ्रेमच्या आकाराशी सुसंगत ठेवणे
-        const exportWidth = 1000;
-        const exportHeight = Math.round(exportWidth / targetRatio);
+        // आउटपुट कॅनव्हासचे आकारमान सेट करणे (उंची कमी करून रेशोनुसार सेट केली आहे)
+        const exportWidth = 528;
+        const exportHeight = 382;
 
         canvas.width = exportWidth;
         canvas.height = exportHeight;
@@ -200,7 +201,7 @@ export default function CameraCapture({
     }, [onCapture, stopCamera]);
 
     // =====================================================
-    // GALLERY PHOTO UPLOAD (Frame Box Ratio 528:382)
+    // GALLERY PHOTO UPLOAD (528:382 Aspect Ratio नुसार क्रॉपिंग)
     // =====================================================
 
     const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -237,7 +238,6 @@ export default function CameraCapture({
 
                 if (!ctx) return;
 
-                // फ्रेममधील बॉक्सची साईज (528x382) -> Ratio = 528 / 382
                 const targetRatio = 528 / 382;
 
                 let sourceW = img.width;
@@ -251,8 +251,8 @@ export default function CameraCapture({
                 const sourceX = (img.width - sourceW) / 2;
                 const sourceY = (img.height - sourceH) / 2;
 
-                const exportWidth = 1000;
-                const exportHeight = Math.round(exportWidth / targetRatio);
+                const exportWidth = 528;
+                const exportHeight = 382;
 
                 canvas.width = exportWidth;
                 canvas.height = exportHeight;

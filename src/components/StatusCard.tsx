@@ -16,7 +16,7 @@ export default function SuccessView({
     onReset,
 }: SuccessViewProps) {
     const [sharing, setSharing] = useState(false);
-    const [statusImage, setStatusImage] = useState("");
+    const [downloading, setDownloading] = useState(false);
     const [uniqueId, setUniqueId] = useState("");
 
     // Drag States
@@ -28,6 +28,8 @@ export default function SuccessView({
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const selfieImgRef = useRef<HTMLImageElement | null>(null);
     const frameImgRef = useRef<HTMLImageElement | null>(null);
+
+    const boxBoundsRef = useRef({ boxX: 0, boxY: 0, boxW: 0, boxH: 0 });
 
     // Unique ID Generation
     useEffect(() => {
@@ -55,7 +57,6 @@ export default function SuccessView({
         });
     };
 
-    // Frame Layout Config (फ्रेममधील फोटोच्या बॉक्सचे स्थान व आकार)
     const getLayoutConfig = (canvasW: number, canvasH: number) => {
         return {
             boxX: canvasW * 0.08,
@@ -65,7 +66,7 @@ export default function SuccessView({
         };
     };
 
-    // RENDER CANVAS
+    // FAST RENDER CANVAS (इथे toDataURL काढून टाकले आहे)
     const renderCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         const selfie = selfieImgRef.current;
@@ -79,19 +80,17 @@ export default function SuccessView({
         const canvasW = frame.naturalWidth || 1200;
         const canvasH = frame.naturalHeight || 1800;
 
-        canvas.width = canvasW;
-        canvas.height = canvasH;
+        if (canvas.width !== canvasW) canvas.width = canvasW;
+        if (canvas.height !== canvasH) canvas.height = canvasH;
 
         const { boxX, boxY, boxW, boxH } = getLayoutConfig(canvasW, canvasH);
+        boxBoundsRef.current = { boxX, boxY, boxW, boxH };
 
         const imgRatio = selfie.width / selfie.height;
         const boxRatio = boxW / boxH;
 
-        // फोटो उंचीला मोठा आहे का? (isTall)
         const isTall = imgRatio < boxRatio;
-        if (canDrag !== isTall) {
-            setCanDrag(isTall);
-        }
+        setCanDrag(isTall);
 
         let drawW = boxW;
         let drawH = boxH;
@@ -105,7 +104,6 @@ export default function SuccessView({
             drawX = boxX + (boxW - drawW) / 2;
         }
 
-        // Limit Y Movement
         const minOffsetY = boxH - drawH;
         const maxOffsetY = 0;
         const clampedOffsetY = isTall
@@ -114,7 +112,7 @@ export default function SuccessView({
 
         const drawY = boxY + (isTall ? clampedOffsetY : (boxH - drawH) / 2);
 
-        // 1. Clear Context
+        // 1. Clear
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvasW, canvasH);
 
@@ -188,9 +186,7 @@ export default function SuccessView({
             ctx.fillText(idText, canvasW / 2, idBoxY + idBoxH / 2);
             ctx.restore();
         }
-
-        setStatusImage(canvas.toDataURL("image/jpeg", 0.92));
-    }, [fullName, uniqueId, photoOffsetY, canDrag]);
+    }, [fullName, uniqueId, photoOffsetY]);
 
     useEffect(() => {
         if (!selfieDataUrl || !uniqueId) return;
@@ -210,9 +206,7 @@ export default function SuccessView({
         renderCanvas();
     }, [photoOffsetY, renderCanvas]);
 
-    // ----------------------------------------------------
-    // ACCURATE POINTER EVENTS (ONLY INNER PHOTO FRAME DRAG)
-    // ----------------------------------------------------
+    // Touch Controls
     const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
         if (!canDrag) return;
 
@@ -223,13 +217,11 @@ export default function SuccessView({
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
 
-        // युजरने जिथे टच केले ते Canvas वरील X आणि Y कॉर्डिनेट
         const clickXInCanvas = (e.clientX - rect.left) * scaleX;
         const clickYInCanvas = (e.clientY - rect.top) * scaleY;
 
-        const { boxX, boxY, boxW, boxH } = getLayoutConfig(canvas.width, canvas.height);
+        const { boxX, boxY, boxW, boxH } = boxBoundsRef.current;
 
-        // अचूक तपासणी: क्लिक किंवा टच फक्त फोटोच्या बॉक्सच्या आतच झाला पाहिजे!
         const isInsidePhotoBox =
             clickXInCanvas >= boxX &&
             clickXInCanvas <= boxX + boxW &&
@@ -255,14 +247,13 @@ export default function SuccessView({
 
         const deltaY = (e.clientY - startY) * scaleY;
 
-        const { boxW, boxH } = getLayoutConfig(canvas.width, canvas.height);
+        const { boxW, boxH } = boxBoundsRef.current;
         const imgRatio = selfie.width / selfie.height;
         const drawH = boxW / imgRatio;
 
         const minOffsetY = boxH - drawH;
         const maxOffsetY = 0;
 
-        // फोटो चौकटीच्या बाहेर जाणार नाही अशा प्रकारे Offset Clamp करणे
         setPhotoOffsetY((prev) => {
             const nextOffset = prev + deltaY;
             return Math.max(minOffsetY, Math.min(maxOffsetY, nextOffset));
@@ -277,39 +268,63 @@ export default function SuccessView({
             try {
                 (e.target as HTMLElement).releasePointerCapture(e.pointerId);
             } catch (err) {
-                // Pointer release error ignore
+                // ignore
             }
         }
     };
 
-    const downloadPhoto = () => {
-        if (!statusImage) return;
+    // FAST BLOB GENERATOR
+    const getCanvasBlob = (): Promise<Blob | null> => {
+        return new Promise((resolve) => {
+            if (!canvasRef.current) return resolve(null);
+            canvasRef.current.toBlob(
+                (blob) => resolve(blob),
+                "image/jpeg",
+                0.85 // 0.85 क्वालिटीमुळे फोटो साईज कमी होऊन लगेच सेव्ह होतो
+            );
+        });
+    };
+
+    // FAST DOWNLOAD
+    const downloadPhoto = async () => {
+        setDownloading(true);
+        const blob = await getCanvasBlob();
+        if (!blob) {
+            setDownloading(false);
+            return;
+        }
+
+        const url = URL.createObjectURL(blob);
         const safeName = fullName.trim().replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "");
         const link = document.createElement("a");
-        link.href = statusImage;
+        link.href = url;
         link.download = `GanpatiUtsav_${safeName || "Participant"}.jpg`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setDownloading(false);
     };
 
+    // FAST SHARE
     const sharePhoto = async () => {
-        if (!statusImage) return;
+        setSharing(true);
+        const blob = await getCanvasBlob();
+        if (!blob) {
+            setSharing(false);
+            return;
+        }
 
         try {
-            setSharing(true);
-            const res = await fetch(statusImage);
-            const blob = await res.blob();
             const file = new File([blob], "GanpatiUtsav.jpg", { type: "image/jpeg" });
 
             const shareText = `गणपती बाप्पा मोरया 🙏\n\n${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\nUnique ID: ${uniqueId}\n\nनवीन सहभागासाठी नोंदणी करा:\n${FORM_LINK}`;
 
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({ title: "गणपती उत्सव", text: shareText, files: [file] });
-                return;
+            } else {
+                window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
             }
-
-            window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
         } catch (error) {
             console.error("Share error:", error);
         } finally {
@@ -318,7 +333,7 @@ export default function SuccessView({
     };
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-5 sm:px-6 sm:py-10 select-none">
+        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-5 sm:px-6 sm:py-10">
             <div className="mx-auto w-full max-w-2xl">
                 <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl">
                     <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-5 py-7 text-center text-white">
@@ -348,8 +363,8 @@ export default function SuccessView({
                             <div className="relative overflow-hidden rounded-2xl border-4 border-orange-100 shadow-lg">
                                 <canvas
                                     ref={canvasRef}
-                                    style={{ touchAction: "none" }}
-                                    className={`h-auto max-h-[720px] w-full max-w-md object-contain ${canDrag ? "cursor-grab active:cursor-grabbing" : ""
+                                    style={{ touchAction: "pan-y" }}
+                                    className={`h-auto max-h-[60vh] w-full max-w-md object-contain ${canDrag ? "cursor-grab active:cursor-grabbing" : ""
                                         }`}
                                     onPointerDown={handlePointerDown}
                                     onPointerMove={handlePointerMove}
@@ -359,17 +374,17 @@ export default function SuccessView({
                             </div>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-2 pt-2">
                             <button
                                 onClick={downloadPhoto}
-                                disabled={!statusImage}
+                                disabled={downloading}
                                 className="rounded-xl bg-orange-600 px-5 py-3.5 font-bold text-white shadow hover:bg-orange-700 disabled:opacity-50"
                             >
-                                ⬇️ इमेज जतन करा
+                                {downloading ? "जतन होत आहे..." : "⬇️ इमेज जतन करा"}
                             </button>
                             <button
                                 onClick={sharePhoto}
-                                disabled={sharing || !statusImage}
+                                disabled={sharing}
                                 className="rounded-xl border border-orange-300 bg-white px-5 py-3.5 font-bold text-orange-700 hover:bg-orange-50 disabled:opacity-50"
                             >
                                 {sharing ? "Share होत आहे..." : "↗️ इमेज Share करा"}

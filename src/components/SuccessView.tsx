@@ -233,7 +233,6 @@ export default function SuccessView({
 
         const rect = canvas.getBoundingClientRect();
 
-        // Canvas Ratio नुसार X आणि Y स्थान शोधणे
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
 
@@ -242,7 +241,7 @@ export default function SuccessView({
 
         const { BOX_X: boxX, BOX_Y: boxY, BOX_WIDTH: boxW, BOX_HEIGHT: boxH } = FRAME_CONFIG;
 
-        // X आणि Y दोन्ही अक्षांची तपासणी (फक्त काळ्या चौकटीतच क्लिक चालू होईल)
+        // X आणि Y अक्षांची तपासणी - फोटोच्या बॉक्सवरच ड्रॅग ऑन होईल
         const isInsideBlackBox =
             clickXCanvas >= boxX &&
             clickXCanvas <= boxX + boxW &&
@@ -279,22 +278,35 @@ export default function SuccessView({
         }
     };
 
-    // DOWNLOAD PHOTO
-    const downloadPhoto = () => {
-        const canvas = previewCanvasRef.current;
-        if (!canvas) return;
+    // FAST BLOB GENERATOR (इमेज लगेच जतन/शेअर होण्यासाठी)
+    const getCanvasBlob = (): Promise<Blob | null> => {
+        return new Promise((resolve) => {
+            if (!previewCanvasRef.current) return resolve(null);
+            previewCanvasRef.current.toBlob(
+                (blob) => resolve(blob),
+                "image/jpeg",
+                0.88
+            );
+        });
+    };
 
+    // DOWNLOAD PHOTO (FAST)
+    const downloadPhoto = async () => {
         setSaving(true);
         try {
+            const blob = await getCanvasBlob();
+            if (!blob) return;
+
+            const url = URL.createObjectURL(blob);
             const safeName = fullName.trim().replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "");
-            const imageData = canvas.toDataURL("image/jpeg", 0.95);
 
             const link = document.createElement("a");
-            link.href = imageData;
+            link.href = url;
             link.download = `GanpatiUtsav_${safeName || "Participant"}.jpg`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         } catch (error) {
             console.error("Download error:", error);
         } finally {
@@ -302,11 +314,8 @@ export default function SuccessView({
         }
     };
 
-    // SHARE PHOTO
+    // SHARE PHOTO (FAST)
     const sharePhoto = async () => {
-        const canvas = previewCanvasRef.current;
-        if (!canvas) return;
-
         try {
             setSharing(true);
 
@@ -323,10 +332,7 @@ export default function SuccessView({
                 `• सहभागी सर्व मुलांना बाल पर्यावरण दूत पुरस्कार वजा प्रमाणपत्र आणि लकी ड्रॉ मधून आलेल्या दीडशे लकी विजेत्यांना आकर्षक भेटवस्तू मिळेल.\n\n` +
                 `नवा सहभाग नोंदवण्यासाठी लिंकवर क्लिक करा:\n${FORM_LINK}`;
 
-            const blob = await new Promise<Blob | null>((resolve) =>
-                canvas.toBlob(resolve, "image/jpeg", 0.95)
-            );
-
+            const blob = await getCanvasBlob();
             if (!blob) throw new Error("Blob creation failed");
 
             const file = new File([blob], `GanpatiUtsav_${Date.now()}.jpg`, { type: "image/jpeg" });
@@ -366,7 +372,7 @@ export default function SuccessView({
             <div className="w-full max-w-sm">
                 <div className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-lg">
 
-                    {/* Header: दोन ओळींचा मेसेज */}
+                    {/* Header */}
                     <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-3 py-3 text-center text-white flex items-center justify-center gap-2.5">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-bold">
                             ✓
@@ -393,7 +399,7 @@ export default function SuccessView({
 
                                 <canvas
                                     ref={previewCanvasRef}
-                                    style={{ touchAction: "none" }}
+                                    style={{ touchAction: "pan-y" }} // स्क्रोल चालण्यासाठी "pan-y" केले
                                     className={`w-[260px] max-w-full rounded-xl border-2 border-orange-400 bg-white shadow-md ${canDrag ? "cursor-grab active:cursor-grabbing" : ""
                                         }`}
                                     onPointerDown={handlePointerDown}
