@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 
 interface SuccessViewProps {
     fullName: string;
@@ -18,9 +18,18 @@ export default function SuccessView({
     const [sharing, setSharing] = useState(false);
     const [statusImage, setStatusImage] = useState("");
     const [uniqueId, setUniqueId] = useState("");
-    const [creatingImage, setCreatingImage] = useState(true);
 
-    // Unique ID Generation (Runs Once)
+    // Drag States
+    const [photoOffsetY, setPhotoOffsetY] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const [startY, setStartY] = useState(0);
+    const [canDrag, setCanDrag] = useState(false);
+
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const selfieImgRef = useRef<HTMLImageElement | null>(null);
+    const frameImgRef = useRef<HTMLImageElement | null>(null);
+
+    // Unique ID
     useEffect(() => {
         const now = new Date();
         const datePart =
@@ -33,18 +42,8 @@ export default function SuccessView({
             .substring(2, 6)
             .toUpperCase();
 
-        const id = `TB-GAN-${datePart}-${randomPart}`;
-        setUniqueId(id);
+        setUniqueId(`TB-GAN-${datePart}-${randomPart}`);
     }, []);
-
-    const getFileName = () => {
-        const safeName = fullName
-            .trim()
-            .replace(/[^\p{L}\p{N}]+/gu, "_")
-            .replace(/^_+|_+$/g, "");
-
-        return `GanpatiUtsav_${safeName || "Participant"}.jpg`;
-    };
 
     const loadImage = (src: string): Promise<HTMLImageElement> => {
         return new Promise((resolve, reject) => {
@@ -56,156 +55,216 @@ export default function SuccessView({
         });
     };
 
-    /*
-     * Canvas Image Builder
-     */
-    const createStatusImage = async (): Promise<string> => {
-        if (!selfieDataUrl) throw new Error("Selfie image not available.");
-        if (!uniqueId) throw new Error("Unique ID not ready.");
+    // Frame Layout Config
+    const getLayoutConfig = (canvasW: number, canvasH: number) => {
+        return {
+            boxX: canvasW * 0.08,
+            boxY: canvasH * 0.28,
+            boxW: canvasW * 0.84,
+            boxH: canvasH * 0.52,
+        };
+    };
 
-        const framePath = encodeURI(`/share image.png?v=${Date.now()}`);
+    // RENDER CANVAS
+    const renderCanvas = useCallback(() => {
+        const canvas = canvasRef.current;
+        const selfie = selfieImgRef.current;
+        const frame = frameImgRef.current;
 
-        const frameImage = await loadImage(framePath);
-        const selfieImage = await loadImage(selfieDataUrl);
+        if (!canvas || !selfie || !frame) return;
 
-        const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
+        if (!ctx) return;
 
-        if (!ctx) throw new Error("Canvas उपलब्ध नाही.");
+        const canvasW = frame.naturalWidth || 1200;
+        const canvasH = frame.naturalHeight || 1800;
 
-        const canvasWidth = frameImage.naturalWidth || 1200;
-        const canvasHeight = frameImage.naturalHeight || 1800;
+        canvas.width = canvasW;
+        canvas.height = canvasH;
 
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
+        const { boxX, boxY, boxW, boxH } = getLayoutConfig(canvasW, canvasH);
 
-        // ----------------------------------------------------
-        // STEP 1: Background & Selfie (Bottom Layer)
-        // ----------------------------------------------------
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        const imgRatio = selfie.width / selfie.height;
+        const boxRatio = boxW / boxH;
 
-        const selfieBoxX = canvasWidth * 0.08;
-        const selfieBoxY = canvasHeight * 0.28;
-        const selfieBoxWidth = canvasWidth * 0.84;
-        const selfieBoxHeight = canvasHeight * 0.52;
-
-        const imgRatio = selfieImage.width / selfieImage.height;
-        const boxRatio = selfieBoxWidth / selfieBoxHeight;
-
-        let drawWidth = selfieBoxWidth;
-        let drawHeight = selfieBoxHeight;
-        let drawX = selfieBoxX;
-        let drawY = selfieBoxY;
-
-        if (imgRatio > boxRatio) {
-            drawHeight = selfieBoxHeight;
-            drawWidth = drawHeight * imgRatio;
-            drawX = selfieBoxX + (selfieBoxWidth - drawWidth) / 2;
-        } else {
-            drawWidth = selfieBoxWidth;
-            drawHeight = drawWidth / imgRatio;
-            drawY = selfieBoxY + (selfieBoxHeight - drawHeight) / 2;
+        // फोटो उंचीला मोठा आहे का? (isTall)
+        const isTall = imgRatio < boxRatio;
+        if (canDrag !== isTall) {
+            setCanDrag(isTall);
         }
 
+        let drawW = boxW;
+        let drawH = boxH;
+        let drawX = boxX;
+
+        if (isTall) {
+            drawH = boxW / imgRatio;
+            drawX = boxX;
+        } else {
+            drawW = boxH * imgRatio;
+            drawX = boxX + (boxW - drawW) / 2;
+        }
+
+        // Limit Y Movement
+        const minOffsetY = boxH - drawH;
+        const maxOffsetY = 0;
+        const clampedOffsetY = isTall
+            ? Math.max(minOffsetY, Math.min(maxOffsetY, photoOffsetY))
+            : 0;
+
+        const drawY = boxY + (isTall ? clampedOffsetY : (boxH - drawH) / 2);
+
+        // 1. Clear Context
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        // 2. Selfie Image Clip & Draw
         ctx.save();
         ctx.beginPath();
-        ctx.rect(selfieBoxX, selfieBoxY, selfieBoxWidth, selfieBoxHeight);
+        ctx.rect(boxX, boxY, boxW, boxH);
         ctx.clip();
-        ctx.drawImage(selfieImage, drawX, drawY, drawWidth, drawHeight);
+        ctx.drawImage(selfie, drawX, drawY, drawW, drawH);
         ctx.restore();
 
-        // ----------------------------------------------------
-        // STEP 2: Main Frame Layer (Top Layer)
-        // ----------------------------------------------------
-        ctx.drawImage(frameImage, 0, 0, canvasWidth, canvasHeight);
+        // 3. Frame
+        ctx.drawImage(frame, 0, 0, canvasW, canvasH);
 
-        // ----------------------------------------------------
-        // STEP 3: Text Overlay (Unique ID & Name)
-        // ----------------------------------------------------
-
-        // 1. UNIQUE ID (EXACT TOP CENTER)
-        ctx.save();
-        ctx.shadowBlur = 0;
-        ctx.textAlign = "center"; // horizontal centering
-        ctx.textBaseline = "middle"; // vertical centering
-        ctx.fillStyle = "#5C2C16"; // Dark Chocolate Color
-        ctx.font = `bold ${Math.round(canvasWidth * 0.038)}px Arial, sans-serif`;
-
-        // X: 0.5 (Dead Center), Y: 0.035 (कार्डच्या अगदी वरच्या मोकळ्या भागात)
-        ctx.fillText(`ID: ${uniqueId}`, canvasWidth * 0.5, canvasHeight * 0.035);
-        ctx.restore();
-
-        // 2. FULL NAME (With White Background Box)
-        ctx.save();
-        ctx.shadowBlur = 0;
-
+        // 4. Name Box
         const nameText = fullName.trim();
-        const fontSize = Math.round(canvasWidth * 0.042);
+        const fontSize = Math.round(canvasW * 0.042);
+        ctx.save();
         ctx.font = `bold ${fontSize}px Arial, Noto Sans Devanagari, sans-serif`;
 
-        const textMetrics = ctx.measureText(nameText);
-        const textWidth = textMetrics.width;
+        const nameWidth = ctx.measureText(nameText).width;
+        const paddingX = canvasW * 0.05;
+        const paddingY = canvasH * 0.012;
+        const nameBoxW = nameWidth + paddingX * 2;
+        const nameBoxH = fontSize + paddingY * 2;
 
-        const paddingX = canvasWidth * 0.05;
-        const paddingY = canvasHeight * 0.012;
-        const boxWidth = textWidth + paddingX * 2;
-        const boxHeight = fontSize + paddingY * 2;
+        const nameBoxX = (canvasW - nameBoxW) / 2;
+        const nameBoxY = canvasH * 0.81 - nameBoxH / 2;
 
-        const boxX = (canvasWidth - boxWidth) / 2;
-        const boxY = canvasHeight * 0.81 - boxHeight / 2;
-        const cornerRadius = 12;
-
-        // White Box Background
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, cornerRadius);
+        ctx.roundRect(nameBoxX, nameBoxY, nameBoxW, nameBoxH, 12);
         ctx.fill();
 
-        // Orange Border
         ctx.strokeStyle = "#e65100";
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Name Text
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "#7a2d00";
-        ctx.fillText(nameText, canvasWidth / 2, canvasHeight * 0.81);
+        ctx.fillText(nameText, canvasW / 2, canvasH * 0.81);
         ctx.restore();
 
-        return canvas.toDataURL("image/jpeg", 0.92);
-    };
+        // 5. Unique ID Box
+        if (uniqueId) {
+            const idText = `ID: ${uniqueId}`;
+            const idFontSize = Math.round(canvasW * 0.032);
+
+            ctx.save();
+            ctx.font = `bold ${idFontSize}px Arial, sans-serif`;
+            const idWidth = ctx.measureText(idText).width;
+
+            const idBoxW = idWidth + 32;
+            const idBoxH = idFontSize + 16;
+            const idBoxX = (canvasW - idBoxW) / 2;
+            const idBoxY = nameBoxY + nameBoxH + 12;
+
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.roundRect(idBoxX, idBoxY, idBoxW, idBoxH, 8);
+            ctx.fill();
+
+            ctx.strokeStyle = "#f97316";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = "#5C2C16";
+            ctx.fillText(idText, canvasW / 2, idBoxY + idBoxH / 2);
+            ctx.restore();
+        }
+
+        setStatusImage(canvas.toDataURL("image/jpeg", 0.92));
+    }, [fullName, uniqueId, photoOffsetY, canDrag]);
 
     useEffect(() => {
         if (!selfieDataUrl || !uniqueId) return;
 
-        let cancelled = false;
+        const framePath = encodeURI(`/share image.png?v=${Date.now()}`);
 
-        const generate = async () => {
+        Promise.all([loadImage(selfieDataUrl), loadImage(framePath)])
+            .then(([selfieImg, frameImg]) => {
+                selfieImgRef.current = selfieImg;
+                frameImgRef.current = frameImg;
+                renderCanvas();
+            })
+            .catch((err) => console.error("Load error:", err));
+    }, [selfieDataUrl, uniqueId, renderCanvas]);
+
+    useEffect(() => {
+        renderCanvas();
+    }, [photoOffsetY, renderCanvas]);
+
+    // ----------------------------------------------------
+    // ACCURATE POINTER EVENTS (TOUCH + MOUSE)
+    // ----------------------------------------------------
+    const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (!canDrag) return;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleY = canvas.height / rect.height;
+
+        // क्लिक किंवा टच नक्की फोटोच्या बॉक्सवर झाला आहे का?
+        const clickYInCanvas = (e.clientY - rect.top) * scaleY;
+        const { boxY, boxH } = getLayoutConfig(canvas.width, canvas.height);
+
+        if (clickYInCanvas >= boxY && clickYInCanvas <= boxY + boxH) {
+            setIsDragging(true);
+            setStartY(e.clientY);
+            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        }
+    };
+
+    const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (!isDragging || !canDrag) return;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleY = canvas.height / rect.height;
+
+        const deltaY = (e.clientY - startY) * scaleY;
+
+        setPhotoOffsetY((prev) => prev + deltaY);
+        setStartY(e.clientY);
+    };
+
+    const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (isDragging) {
+            setIsDragging(false);
             try {
-                setCreatingImage(true);
-                const image = await createStatusImage();
-                if (!cancelled) setStatusImage(image);
-            } catch (error) {
-                console.error("Status image creation error:", error);
-            } finally {
-                if (!cancelled) setCreatingImage(false);
+                (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+            } catch (err) {
+                // Pointer release error ignore
             }
-        };
-
-        generate();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [selfieDataUrl, uniqueId, fullName]);
+        }
+    };
 
     const downloadPhoto = () => {
         if (!statusImage) return;
+        const safeName = fullName.trim().replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "");
         const link = document.createElement("a");
         link.href = statusImage;
-        link.download = getFileName();
+        link.download = `GanpatiUtsav_${safeName || "Participant"}.jpg`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -218,38 +277,16 @@ export default function SuccessView({
             setSharing(true);
             const res = await fetch(statusImage);
             const blob = await res.blob();
-            const file = new File([blob], getFileName(), { type: "image/jpeg" });
+            const file = new File([blob], "GanpatiUtsav.jpg", { type: "image/jpeg" });
 
-            const shareText =
-                `गणपती बाप्पा मोरया 🙏\n\n` +
-                `${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\n` +
-                `Unique ID: ${uniqueId}\n\n` +
-                `नवीन सहभागासाठी नोंदणी करा:\n` +
-                `${FORM_LINK}`;
+            const shareText = `गणपती बाप्पा मोरया 🙏\n\n${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\nUnique ID: ${uniqueId}\n\nनवीन सहभागासाठी नोंदणी करा:\n${FORM_LINK}`;
 
-            if (
-                navigator.share &&
-                navigator.canShare &&
-                navigator.canShare({ files: [file] })
-            ) {
-                await navigator.share({
-                    title: "गणपती उत्सव",
-                    text: shareText,
-                    files: [file],
-                });
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ title: "गणपती उत्सव", text: shareText, files: [file] });
                 return;
             }
 
-            const whatsappText =
-                `गणपती बाप्पा मोरया 🙏\n\n` +
-                `${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\n` +
-                `नवीन सहभागासाठी नोंदणी करा:\n` +
-                `${FORM_LINK}`;
-
-            window.open(
-                "https://wa.me/?text=" + encodeURIComponent(whatsappText),
-                "_blank"
-            );
+            window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
         } catch (error) {
             console.error("Share error:", error);
         } finally {
@@ -258,7 +295,7 @@ export default function SuccessView({
     };
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-5 sm:px-6 sm:py-10">
+        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-5 sm:px-6 sm:py-10 select-none">
             <div className="mx-auto w-full max-w-2xl">
                 <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl">
                     <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-5 py-7 text-center text-white">
@@ -278,22 +315,25 @@ export default function SuccessView({
                             )}
                         </div>
 
-                        <div className="flex justify-center">
-                            {statusImage ? (
-                                <div className="overflow-hidden rounded-2xl border-4 border-orange-100 shadow-lg">
-                                    <img
-                                        src={statusImage}
-                                        alt="कार्ड"
-                                        className="h-auto max-h-[720px] w-full max-w-md object-contain"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="flex min-h-[320px] w-full max-w-md items-center justify-center rounded-2xl border border-orange-100 bg-orange-50">
-                                    <p className="text-sm font-medium text-gray-600">
-                                        इमेज तयार होत आहे...
-                                    </p>
-                                </div>
+                        <div className="flex flex-col items-center justify-center">
+                            {canDrag && (
+                                <p className="mb-2 text-xs font-semibold text-orange-700 bg-orange-100 px-3 py-1 rounded-full animate-pulse">
+                                    ↕️ फोटो वर-खाली सेट करण्यासाठी फोटोवर ड्रॅग करा
+                                </p>
                             )}
+
+                            <div className="relative overflow-hidden rounded-2xl border-4 border-orange-100 shadow-lg">
+                                <canvas
+                                    ref={canvasRef}
+                                    style={{ touchAction: "none" }} // मोबाईलवर पेज स्क्रोल होणार नाही
+                                    className={`h-auto max-h-[720px] w-full max-w-md object-contain ${canDrag ? "cursor-grab active:cursor-grabbing" : ""
+                                        }`}
+                                    onPointerDown={handlePointerDown}
+                                    onPointerMove={handlePointerMove}
+                                    onPointerUp={handlePointerUp}
+                                    onPointerCancel={handlePointerUp}
+                                />
+                            </div>
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-2">

@@ -31,6 +31,12 @@ export default function SuccessView({
     const [uniqueId, setUniqueId] = useState("");
     const [saving, setSaving] = useState(false);
 
+    // DRAG STATES
+    const [photoOffsetY, setPhotoOffsetY] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const [startY, setStartY] = useState(0);
+    const [canDrag, setCanDrag] = useState(false);
+
     const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const selfieImgRef = useRef<HTMLImageElement | null>(null);
     const frameImgRef = useRef<HTMLImageElement | null>(null);
@@ -63,22 +69,45 @@ export default function SuccessView({
         });
     };
 
-    // LAYOUT CALCULATION (Auto Centered Photo)
+    // LAYOUT CALCULATION (DRAG OFFSET CHECK INCLUDED)
     const getPhotoLayout = useCallback(() => {
         const selfie = selfieImgRef.current;
         if (!selfie) return null;
 
         const { BOX_X: boxX, BOX_Y: boxY, BOX_WIDTH: boxW, BOX_HEIGHT: boxH } = FRAME_CONFIG;
 
-        const scale = Math.max(boxW / selfie.width, boxH / selfie.height);
-        const drawW = selfie.width * scale;
-        const drawH = selfie.height * scale;
+        const imgRatio = selfie.width / selfie.height;
+        const boxRatio = boxW / boxH;
 
-        const drawX = boxX + (boxW - drawW) / 2;
-        const drawY = boxY + (boxH - drawH) / 2;
+        // फोटो उंचीला मोठा आहे का ते तपासणे (Tall check)
+        const isTall = imgRatio < boxRatio;
+        if (canDrag !== isTall) {
+            setCanDrag(isTall);
+        }
+
+        let drawW = boxW;
+        let drawH = boxH;
+        let drawX = boxX;
+
+        if (isTall) {
+            drawH = boxW / imgRatio;
+            drawX = boxX;
+        } else {
+            drawW = boxH * imgRatio;
+            drawX = boxX + (boxW - drawW) / 2;
+        }
+
+        // Limit Vertical Movement Boundaries
+        const minOffsetY = boxH - drawH;
+        const maxOffsetY = 0;
+        const clampedOffsetY = isTall
+            ? Math.max(minOffsetY, Math.min(maxOffsetY, photoOffsetY))
+            : 0;
+
+        const drawY = boxY + (isTall ? clampedOffsetY : (boxH - drawH) / 2);
 
         return { boxX, boxY, boxW, boxH, drawW, drawH, drawX, drawY };
-    }, []);
+    }, [photoOffsetY, canDrag]);
 
     // CANVAS DRAWING
     const drawCanvas = useCallback(() => {
@@ -200,6 +229,60 @@ export default function SuccessView({
             .catch((err) => console.error("Image load error:", err));
     }, [selfieDataUrl, drawCanvas]);
 
+    // UPDATE CANVAS ON OFFSET CHANGE
+    useEffect(() => {
+        drawCanvas();
+    }, [photoOffsetY, drawCanvas]);
+
+    // ----------------------------------------------------
+    // POINTER DRAG HANDLERS (Photo Box Only)
+    // ----------------------------------------------------
+    const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (!canDrag) return;
+
+        const canvas = previewCanvasRef.current;
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleY = canvas.height / rect.height;
+
+        const clickYCanvas = (e.clientY - rect.top) * scaleY;
+        const { BOX_Y: boxY, BOX_HEIGHT: boxH } = FRAME_CONFIG;
+
+        // जर फक्त फोटोच्या चौकटीवर क्लिक झाले असेल तरच ड्रॅग सुरू करा
+        if (clickYCanvas >= boxY && clickYCanvas <= boxY + boxH) {
+            setIsDragging(true);
+            setStartY(e.clientY);
+            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        }
+    };
+
+    const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (!isDragging || !canDrag) return;
+
+        const canvas = previewCanvasRef.current;
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleY = canvas.height / rect.height;
+
+        const deltaY = (e.clientY - startY) * scaleY;
+
+        setPhotoOffsetY((prev) => prev + deltaY);
+        setStartY(e.clientY);
+    };
+
+    const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (isDragging) {
+            setIsDragging(false);
+            try {
+                (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+            } catch (err) {
+                // Ignore capture release error
+            }
+        }
+    };
+
     // DOWNLOAD PHOTO
     const downloadPhoto = () => {
         const canvas = previewCanvasRef.current;
@@ -223,7 +306,7 @@ export default function SuccessView({
         }
     };
 
-    // ADVANCED ROBUST SHARE FUNCTION WITH FALLBACK
+    // SHARE PHOTO
     const sharePhoto = async () => {
         const canvas = previewCanvasRef.current;
         if (!canvas) return;
@@ -232,7 +315,6 @@ export default function SuccessView({
             setSharing(true);
             const shareText = `गणपती बाप्पा मोरया 🙏\n\n${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\nUnique ID: ${uniqueId}\n\nनवीन सहभागासाठी नोंदणी करा:\n${FORM_LINK}`;
 
-            // Canvas to Blob Conversion
             const blob = await new Promise<Blob | null>((resolve) =>
                 canvas.toBlob(resolve, "image/jpeg", 0.95)
             );
@@ -243,7 +325,6 @@ export default function SuccessView({
 
             const file = new File([blob], `GanpatiUtsav_${Date.now()}.jpg`, { type: "image/jpeg" });
 
-            // 1. प्रयत्न १: Web Share API द्वारे Direct File Sharing Check
             if (
                 navigator.canShare &&
                 navigator.canShare({ files: [file] }) &&
@@ -257,7 +338,6 @@ export default function SuccessView({
                 return;
             }
 
-            // 2. प्रयत्न २: जर इमेज फाईल डायरेक्ट शेअर होत नसेल, तर स्वयंचलित इमेज डाउनलोड करा आणि मेसेज WhatsApp वर पाठवा
             downloadPhoto();
             setTimeout(() => {
                 alert("तुमची फोटो इमेज डाउनलोड झाली आहे. आता ती WhatsApp वर शेअर करा!");
@@ -267,7 +347,6 @@ export default function SuccessView({
         } catch (error: any) {
             if (error.name !== "AbortError") {
                 console.error("Share error:", error);
-                // Fallback option in case sharing fails
                 downloadPhoto();
                 window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
             }
@@ -277,7 +356,7 @@ export default function SuccessView({
     };
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-5 sm:px-6 sm:py-10">
+        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-5 sm:px-6 sm:py-10 select-none">
             <div className="mx-auto w-full max-w-2xl">
                 <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl">
                     <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-5 py-7 text-center text-white">
@@ -294,10 +373,22 @@ export default function SuccessView({
                         </div>
 
                         <div className="space-y-4">
-                            <div className="relative flex justify-center">
+                            <div className="relative flex flex-col items-center justify-center">
+                                {canDrag && (
+                                    <p className="mb-2 text-xs font-semibold text-orange-700 bg-orange-100 px-3 py-1 rounded-full animate-pulse">
+                                        ↕️ फोटो वर-खाली सेट करण्यासाठी फोटोवर ड्रॅग करा
+                                    </p>
+                                )}
+
                                 <canvas
                                     ref={previewCanvasRef}
-                                    className="w-[340px] max-w-full rounded-2xl border-4 border-orange-400 bg-white shadow-2xl"
+                                    style={{ touchAction: "none" }}
+                                    className={`w-[340px] max-w-full rounded-2xl border-4 border-orange-400 bg-white shadow-2xl ${canDrag ? "cursor-grab active:cursor-grabbing" : ""
+                                        }`}
+                                    onPointerDown={handlePointerDown}
+                                    onPointerMove={handlePointerMove}
+                                    onPointerUp={handlePointerUp}
+                                    onPointerCancel={handlePointerUp}
                                 />
                             </div>
 
