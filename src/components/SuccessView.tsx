@@ -69,7 +69,7 @@ export default function SuccessView({
         });
     };
 
-    // LAYOUT CALCULATION (DRAG OFFSET CHECK INCLUDED)
+    // LAYOUT CALCULATION (फोटो चौकटीपेक्षा मोठा असेल तरच DRAG चालू होईल)
     const getPhotoLayout = useCallback(() => {
         const selfie = selfieImgRef.current;
         if (!selfie) return null;
@@ -79,32 +79,28 @@ export default function SuccessView({
         const imgRatio = selfie.width / selfie.height;
         const boxRatio = boxW / boxH;
 
-        // फोटो उंचीला मोठा आहे का ते तपासणे (Tall check)
-        const isTall = imgRatio < boxRatio;
-        if (canDrag !== isTall) {
-            setCanDrag(isTall);
+        // फोटोची स्केल्ड साईझ काढणे
+        const scale = Math.max(boxW / selfie.width, boxH / selfie.height);
+        const drawW = selfie.width * scale;
+        const drawH = selfie.height * scale;
+
+        // फोटो चौकटीपेक्षा मोठा आहे का (वर-खाली हलवण्याजोगा आहे का) ते तपासणे
+        const isOverflowing = drawH > boxH + 2;
+
+        if (canDrag !== isOverflowing) {
+            setCanDrag(isOverflowing);
         }
 
-        let drawW = boxW;
-        let drawH = boxH;
-        let drawX = boxX;
+        const drawX = boxX + (boxW - drawW) / 2;
 
-        if (isTall) {
-            drawH = boxW / imgRatio;
-            drawX = boxX;
-        } else {
-            drawW = boxH * imgRatio;
-            drawX = boxX + (boxW - drawW) / 2;
-        }
-
-        // Limit Vertical Movement Boundaries
+        // ड्रॅग बाउंड्री मर्यादित करणे
         const minOffsetY = boxH - drawH;
         const maxOffsetY = 0;
-        const clampedOffsetY = isTall
+        const clampedOffsetY = isOverflowing
             ? Math.max(minOffsetY, Math.min(maxOffsetY, photoOffsetY))
-            : 0;
+            : (boxH - drawH) / 2;
 
-        const drawY = boxY + (isTall ? clampedOffsetY : (boxH - drawH) / 2);
+        const drawY = boxY + (isOverflowing ? clampedOffsetY : (boxH - drawH) / 2);
 
         return { boxX, boxY, boxW, boxH, drawW, drawH, drawX, drawY };
     }, [photoOffsetY, canDrag]);
@@ -234,9 +230,7 @@ export default function SuccessView({
         drawCanvas();
     }, [photoOffsetY, drawCanvas]);
 
-    // ----------------------------------------------------
-    // POINTER DRAG HANDLERS (Photo Box Only)
-    // ----------------------------------------------------
+    // DRAG HANDLERS
     const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
         if (!canDrag) return;
 
@@ -245,11 +239,9 @@ export default function SuccessView({
 
         const rect = canvas.getBoundingClientRect();
         const scaleY = canvas.height / rect.height;
-
         const clickYCanvas = (e.clientY - rect.top) * scaleY;
         const { BOX_Y: boxY, BOX_HEIGHT: boxH } = FRAME_CONFIG;
 
-        // जर फक्त फोटोच्या चौकटीवर क्लिक झाले असेल तरच ड्रॅग सुरू करा
         if (clickYCanvas >= boxY && clickYCanvas <= boxY + boxH) {
             setIsDragging(true);
             setStartY(e.clientY);
@@ -265,7 +257,6 @@ export default function SuccessView({
 
         const rect = canvas.getBoundingClientRect();
         const scaleY = canvas.height / rect.height;
-
         const deltaY = (e.clientY - startY) * scaleY;
 
         setPhotoOffsetY((prev) => prev + deltaY);
@@ -277,9 +268,7 @@ export default function SuccessView({
             setIsDragging(false);
             try {
                 (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-            } catch (err) {
-                // Ignore capture release error
-            }
+            } catch (err) { }
         }
     };
 
@@ -319,9 +308,7 @@ export default function SuccessView({
                 canvas.toBlob(resolve, "image/jpeg", 0.95)
             );
 
-            if (!blob) {
-                throw new Error("Blob creation failed");
-            }
+            if (!blob) throw new Error("Blob creation failed");
 
             const file = new File([blob], `GanpatiUtsav_${Date.now()}.jpg`, { type: "image/jpeg" });
 
@@ -356,34 +343,37 @@ export default function SuccessView({
     };
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-3 py-5 sm:px-6 sm:py-10 select-none">
-            <div className="mx-auto w-full max-w-2xl">
-                <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl">
-                    <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-5 py-7 text-center text-white">
-                        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white/20 text-3xl">
+        <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-2 py-4 sm:px-4 sm:py-6 select-none flex items-center justify-center">
+            {/* कार्ड लहान करण्यासाठी max-w-sm (380px) वापरले आहे */}
+            <div className="w-full max-w-sm">
+                <div className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-lg">
+
+                    {/* Header कॉम्पॅक्ट केला आहे */}
+                    <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-3 py-3 text-center text-white flex items-center justify-center gap-2">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-sm font-bold">
                             ✓
                         </div>
-                        <h1 className="text-2xl font-bold sm:text-3xl">नोंदणी यशस्वी!</h1>
+                        <h1 className="text-lg font-bold">नोंदणी यशस्वी! आपले कार्ड सेव करून घ्या</h1>
                     </div>
 
-                    <div className="space-y-5 p-4 sm:p-7">
+                    <div className="space-y-3 p-3">
                         <div className="text-center">
-                            <h2 className="text-xl font-bold text-gray-900">{fullName}</h2>
-                            {uniqueId && <p className="mt-1 text-sm font-semibold text-orange-600">ID: {uniqueId}</p>}
+                            <h2 className="text-base font-bold text-gray-900 leading-tight">{fullName}</h2>
+                            {uniqueId && <p className="text-xs font-semibold text-orange-600 mt-0.5">ID: {uniqueId}</p>}
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             <div className="relative flex flex-col items-center justify-center">
                                 {canDrag && (
-                                    <p className="mb-2 text-xs font-semibold text-orange-700 bg-orange-100 px-3 py-1 rounded-full animate-pulse">
-                                        ↕️ फोटो वर-खाली सेट करण्यासाठी फोटोवर ड्रॅग करा
+                                    <p className="mb-1.5 text-[11px] font-semibold text-orange-700 bg-orange-100 px-2.5 py-0.5 rounded-full animate-pulse">
+                                        ↕️ फोटो ॲडजस्ट करण्यासाठी वर-खाली ड्रॅग करा
                                     </p>
                                 )}
 
                                 <canvas
                                     ref={previewCanvasRef}
                                     style={{ touchAction: "none" }}
-                                    className={`w-[340px] max-w-full rounded-2xl border-4 border-orange-400 bg-white shadow-2xl ${canDrag ? "cursor-grab active:cursor-grabbing" : ""
+                                    className={`w-[260px] max-w-full rounded-xl border-2 border-orange-400 bg-white shadow-md ${canDrag ? "cursor-grab active:cursor-grabbing" : ""
                                         }`}
                                     onPointerDown={handlePointerDown}
                                     onPointerMove={handlePointerMove}
@@ -392,30 +382,30 @@ export default function SuccessView({
                                 />
                             </div>
 
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid gap-2 grid-cols-2">
                                 <button
                                     type="button"
                                     onClick={downloadPhoto}
                                     disabled={saving}
-                                    className="rounded-xl bg-orange-600 px-5 py-3.5 font-bold text-white shadow hover:bg-orange-700 disabled:opacity-50"
+                                    className="rounded-lg bg-orange-600 px-2 py-2.5 text-xs font-bold text-white shadow hover:bg-orange-700 disabled:opacity-50"
                                 >
-                                    {saving ? "जतन होत आहे..." : "⬇️ इमेज जतन करा"}
+                                    {saving ? "जतन होत आहे..." : "⬇️ जतन करा"}
                                 </button>
 
                                 <button
                                     type="button"
                                     onClick={sharePhoto}
                                     disabled={sharing}
-                                    className="rounded-xl border border-orange-300 bg-white px-5 py-3.5 font-bold text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+                                    className="rounded-lg border border-orange-300 bg-white px-2 py-2.5 text-xs font-bold text-orange-700 hover:bg-orange-50 disabled:opacity-50"
                                 >
-                                    {sharing ? "Share होत आहे..." : "↗️ इमेज Share करा"}
+                                    {sharing ? "Share होत आहे..." : "↗️ Share करा"}
                                 </button>
                             </div>
 
                             <button
                                 type="button"
                                 onClick={onReset}
-                                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-5 py-3.5 font-semibold text-gray-700 hover:bg-gray-100"
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100"
                             >
                                 पुन्हा नोंदणी करा
                             </button>
