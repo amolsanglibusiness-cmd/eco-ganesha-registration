@@ -69,22 +69,17 @@ export default function SuccessView({
         });
     };
 
-    // LAYOUT CALCULATION (फोटो चौकटीपेक्षा मोठा असेल तरच DRAG चालू होईल)
+    // LAYOUT CALCULATION
     const getPhotoLayout = useCallback(() => {
         const selfie = selfieImgRef.current;
         if (!selfie) return null;
 
         const { BOX_X: boxX, BOX_Y: boxY, BOX_WIDTH: boxW, BOX_HEIGHT: boxH } = FRAME_CONFIG;
 
-        const imgRatio = selfie.width / selfie.height;
-        const boxRatio = boxW / boxH;
-
-        // फोटोची स्केल्ड साईझ काढणे
         const scale = Math.max(boxW / selfie.width, boxH / selfie.height);
         const drawW = selfie.width * scale;
         const drawH = selfie.height * scale;
 
-        // फोटो चौकटीपेक्षा मोठा आहे का (वर-खाली हलवण्याजोगा आहे का) ते तपासणे
         const isOverflowing = drawH > boxH + 2;
 
         if (canDrag !== isOverflowing) {
@@ -93,7 +88,6 @@ export default function SuccessView({
 
         const drawX = boxX + (boxW - drawW) / 2;
 
-        // ड्रॅग बाउंड्री मर्यादित करणे
         const minOffsetY = boxH - drawH;
         const maxOffsetY = 0;
         const clampedOffsetY = isOverflowing
@@ -344,16 +338,18 @@ export default function SuccessView({
 
     return (
         <main className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-amber-50 px-2 py-4 sm:px-4 sm:py-6 select-none flex items-center justify-center">
-            {/* कार्ड लहान करण्यासाठी max-w-sm (380px) वापरले आहे */}
             <div className="w-full max-w-sm">
                 <div className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-lg">
 
-                    {/* Header कॉम्पॅक्ट केला आहे */}
-                    <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-3 py-3 text-center text-white flex items-center justify-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-sm font-bold">
+                    {/* Header: दोन ओळींचा मेसेज */}
+                    <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-3 py-3 text-center text-white flex items-center justify-center gap-2.5">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-bold">
                             ✓
                         </div>
-                        <h1 className="text-lg font-bold">नोंदणी यशस्वी! आपले कार्ड सेव करून घ्या</h1>
+                        <div className="text-left leading-tight">
+                            <h1 className="text-base font-bold">नोंदणी यशस्वी!</h1>
+                            <h1 className="text-xs font-medium text-orange-100">आपले कार्ड शेअर करा</h1>
+                        </div>
                     </div>
 
                     <div className="space-y-3 p-3">
