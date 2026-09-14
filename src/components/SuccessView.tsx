@@ -224,7 +224,7 @@ export default function SuccessView({
         drawCanvas();
     }, [photoOffsetY, drawCanvas]);
 
-    // DRAG HANDLERS
+    // STRICT DRAG HANDLER (ONLY BLACK FRAME AREA)
     const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
         if (!canDrag) return;
 
@@ -232,11 +232,24 @@ export default function SuccessView({
         if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
-        const scaleY = canvas.height / rect.height;
-        const clickYCanvas = (e.clientY - rect.top) * scaleY;
-        const { BOX_Y: boxY, BOX_HEIGHT: boxH } = FRAME_CONFIG;
 
-        if (clickYCanvas >= boxY && clickYCanvas <= boxY + boxH) {
+        // Canvas Ratio नुसार X आणि Y स्थान शोधणे
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const clickXCanvas = (e.clientX - rect.left) * scaleX;
+        const clickYCanvas = (e.clientY - rect.top) * scaleY;
+
+        const { BOX_X: boxX, BOX_Y: boxY, BOX_WIDTH: boxW, BOX_HEIGHT: boxH } = FRAME_CONFIG;
+
+        // X आणि Y दोन्ही अक्षांची तपासणी (फक्त काळ्या चौकटीतच क्लिक चालू होईल)
+        const isInsideBlackBox =
+            clickXCanvas >= boxX &&
+            clickXCanvas <= boxX + boxW &&
+            clickYCanvas >= boxY &&
+            clickYCanvas <= boxY + boxH;
+
+        if (isInsideBlackBox) {
             setIsDragging(true);
             setStartY(e.clientY);
             (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -297,7 +310,6 @@ export default function SuccessView({
         try {
             setSharing(true);
 
-            // नवीन विशेष सूचनांसह संपूर्ण मेसेज
             const shareText = `गणपती बाप्पा मोरया 🙏\n\n` +
                 `${fullName} यांनी गणपती उत्सवातील आपला खास क्षण नोंदवला आहे.\n\n` +
                 `दैनिक तरुण भारत संवादच्या निर्माल्य संकलन मोहिमेत सहभागी विद्यार्थी आणि घरगुती गणपती सजावट स्पर्धेत सहभाग घेतलेल्या महिलांनी येथे फोटो आणि माहिती अपलोड करा आणि मिळवा आकर्षक सेल्फी स्टेटस.\n\n` +

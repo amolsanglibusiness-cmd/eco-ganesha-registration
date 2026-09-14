@@ -29,7 +29,7 @@ export default function SuccessView({
     const selfieImgRef = useRef<HTMLImageElement | null>(null);
     const frameImgRef = useRef<HTMLImageElement | null>(null);
 
-    // Unique ID
+    // Unique ID Generation
     useEffect(() => {
         const now = new Date();
         const datePart =
@@ -55,7 +55,7 @@ export default function SuccessView({
         });
     };
 
-    // Frame Layout Config
+    // Frame Layout Config (फ्रेममधील फोटोच्या बॉक्सचे स्थान व आकार)
     const getLayoutConfig = (canvasW: number, canvasH: number) => {
         return {
             boxX: canvasW * 0.08,
@@ -211,7 +211,7 @@ export default function SuccessView({
     }, [photoOffsetY, renderCanvas]);
 
     // ----------------------------------------------------
-    // ACCURATE POINTER EVENTS (TOUCH + MOUSE)
+    // ACCURATE POINTER EVENTS (ONLY INNER PHOTO FRAME DRAG)
     // ----------------------------------------------------
     const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
         if (!canDrag) return;
@@ -220,13 +220,23 @@ export default function SuccessView({
         if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
 
-        // क्लिक किंवा टच नक्की फोटोच्या बॉक्सवर झाला आहे का?
+        // युजरने जिथे टच केले ते Canvas वरील X आणि Y कॉर्डिनेट
+        const clickXInCanvas = (e.clientX - rect.left) * scaleX;
         const clickYInCanvas = (e.clientY - rect.top) * scaleY;
-        const { boxY, boxH } = getLayoutConfig(canvas.width, canvas.height);
 
-        if (clickYInCanvas >= boxY && clickYInCanvas <= boxY + boxH) {
+        const { boxX, boxY, boxW, boxH } = getLayoutConfig(canvas.width, canvas.height);
+
+        // अचूक तपासणी: क्लिक किंवा टच फक्त फोटोच्या बॉक्सच्या आतच झाला पाहिजे!
+        const isInsidePhotoBox =
+            clickXInCanvas >= boxX &&
+            clickXInCanvas <= boxX + boxW &&
+            clickYInCanvas >= boxY &&
+            clickYInCanvas <= boxY + boxH;
+
+        if (isInsidePhotoBox) {
             setIsDragging(true);
             setStartY(e.clientY);
             (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -237,14 +247,27 @@ export default function SuccessView({
         if (!isDragging || !canDrag) return;
 
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        const selfie = selfieImgRef.current;
+        if (!canvas || !selfie) return;
 
         const rect = canvas.getBoundingClientRect();
         const scaleY = canvas.height / rect.height;
 
         const deltaY = (e.clientY - startY) * scaleY;
 
-        setPhotoOffsetY((prev) => prev + deltaY);
+        const { boxW, boxH } = getLayoutConfig(canvas.width, canvas.height);
+        const imgRatio = selfie.width / selfie.height;
+        const drawH = boxW / imgRatio;
+
+        const minOffsetY = boxH - drawH;
+        const maxOffsetY = 0;
+
+        // फोटो चौकटीच्या बाहेर जाणार नाही अशा प्रकारे Offset Clamp करणे
+        setPhotoOffsetY((prev) => {
+            const nextOffset = prev + deltaY;
+            return Math.max(minOffsetY, Math.min(maxOffsetY, nextOffset));
+        });
+
         setStartY(e.clientY);
     };
 
@@ -318,14 +341,14 @@ export default function SuccessView({
                         <div className="flex flex-col items-center justify-center">
                             {canDrag && (
                                 <p className="mb-2 text-xs font-semibold text-orange-700 bg-orange-100 px-3 py-1 rounded-full animate-pulse">
-                                    ↕️ फोटो वर-खाली सेट करण्यासाठी फोटोवर ड्रॅग करा
+                                    ↕️ फोटो वर-खाली सेट करण्यासाठी फोटोच्या चौकटीवर ड्रॅग करा
                                 </p>
                             )}
 
                             <div className="relative overflow-hidden rounded-2xl border-4 border-orange-100 shadow-lg">
                                 <canvas
                                     ref={canvasRef}
-                                    style={{ touchAction: "none" }} // मोबाईलवर पेज स्क्रोल होणार नाही
+                                    style={{ touchAction: "none" }}
                                     className={`h-auto max-h-[720px] w-full max-w-md object-contain ${canDrag ? "cursor-grab active:cursor-grabbing" : ""
                                         }`}
                                     onPointerDown={handlePointerDown}
@@ -357,7 +380,7 @@ export default function SuccessView({
                             onClick={onReset}
                             className="w-full rounded-xl border border-gray-200 bg-gray-50 px-5 py-3.5 font-semibold text-gray-700 hover:bg-gray-100"
                         >
-                            पुन्हा नोंदणी करा
+                            पुन्हा नोंदणी करा!
                         </button>
                     </div>
                 </div>
